@@ -1,4 +1,5 @@
 import AccountAccess from './components/common/AccountAccess';
+import PlanlyLogo from './components/common/PlanlyLogo';
 import { format } from 'date-fns';
 import { loadCatholicDay } from './services/publicContent';
 import { lazy, Suspense, useEffect } from 'react';
@@ -56,7 +57,7 @@ function AppContent() {
     );
   }
 
-  if(import.meta.env.PROD && !isCloudAuthenticated)return <main className="auth-screen"><h1>Planly</h1><p>Entre na sua conta para acessar seus dados em qualquer dispositivo.</p><AccountAccess /></main>;
+  if(import.meta.env.PROD && !isCloudAuthenticated)return <main className="auth-screen"><header className="auth-brand"><PlanlyLogo size={48} showText={false} /><h1>Planly</h1><p>Entre na sua conta para acessar seus dados em qualquer dispositivo.</p></header><AccountAccess /><p className="auth-caption">Sua rotina, seus planos, seu ritmo.</p></main>;
 
   return (
     <PageLayout key={user?.id}>
