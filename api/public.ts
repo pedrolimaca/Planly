@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { publicContentResponse } from '../supabase/functions/_shared/publicContent';
+import { publicContentResponse } from '../supabase/functions/_shared/publicContent.js';
 export const config={maxDuration:60};
 export default async function handler(req:IncomingMessage,res:ServerResponse){
  res.setHeader('Content-Type','application/json; charset=utf-8');res.setHeader('X-Content-Type-Options','nosniff');

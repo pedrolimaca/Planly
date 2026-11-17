@@ -32,3 +32,11 @@ test('offline queue survives a lost response and edits made while sending',async
   assert.equal(pendingChanges('alice').length,1);assert.equal(getAllItems<{title:string}>('notes','alice')[0].title,'Mais recente');await syncOnce('alice',transport);assert.equal(pendingChanges('alice').length,0);
  }finally{Object.assign(globalThis,{localStorage:original});}
 });
+
+import { syncErrorMessage } from '../src/services/cloudSync';
+test('sync errors distinguish missing schema from permissions without exposing server details',()=>{
+ assert.match(syncErrorMessage({code:'PGRST205'}),/20261117_sync_records.sql/);
+ assert.match(syncErrorMessage({code:'PGRST202'}),/SQL Editor/);
+ assert.match(syncErrorMessage({code:'42501'}),/permissões/);
+ assert.doesNotMatch(syncErrorMessage({message:'sensitive server details'}),/sensitive/);
+});

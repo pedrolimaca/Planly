@@ -12,6 +12,12 @@ export async function syncOnce(user:string,transport:SyncTransport,active=()=>tr
  if(active()){const rows=await transport.read();if(active())applyCloudRows(user,rows);}
  return conflicts;
 }
+export function syncErrorMessage(error: unknown): string {
+ const code = error && typeof error === 'object' && 'code' in error ? String(error.code) : '';
+ if (['PGRST205', 'PGRST202', '42P01', '42883'].includes(code)) return 'O banco desta conta ainda precisa ser preparado. Execute a migração 20261117_sync_records.sql no SQL Editor do Supabase e clique em Sincronizar agora. Seus dados locais foram mantidos.';
+ if (['42501', 'PGRST301', 'PGRST302', 'PGRST303'].includes(code)) return 'Não foi possível acessar seus dados na nuvem. Entre novamente na conta; se persistir, confira as permissões do banco. Seus dados locais foram mantidos.';
+ return 'Não foi possível sincronizar agora. Confira sua conexão e tente novamente. Seus dados locais foram mantidos.';
+}
 export interface SyncStatus {userId:string;state:'local'|'syncing'|'synced'|'error'|'offline'|'conflict';message:string;pending:number;lastSynced?:string;conflicts:CloudRow[]}
 let status:SyncStatus={userId:'',state:'local',message:'Perfil local — dados somente neste navegador.',pending:0,conflicts:[]};
 const listeners=new Set<()=>void>();
@@ -40,7 +46,7 @@ export function startCloudSync(userId:string){
    const execute=()=>syncOnce(userId,transport,()=>active);
    const conflicts=navigator.locks?await navigator.locks.request('planly-sync-'+userId,execute):await execute();
    if(active){const count=pendingChanges(userId).length;emit({userId,state:conflicts.length?'conflict':count?'syncing':'synced',message:conflicts.length?'Há alterações feitas em dois dispositivos. Resolva em Configurações.':count?'Enviando alterações pendentes…':'Dados sincronizados com sua conta.',pending:count,conflicts,lastSynced:new Date().toISOString()});}
-  }catch(e){if(active)emit({userId,state:navigator.onLine?'error':'offline',message:navigator.onLine?'Não foi possível sincronizar. Confira a sessão e a migração planly_records no Supabase. Seus dados locais foram mantidos.':'Sem conexão. As alterações serão enviadas quando a conexão voltar.',pending:pendingChanges(userId).length,conflicts:[],lastSynced:status.lastSynced});void e;}
+  }catch(e){if(active)emit({userId,state:navigator.onLine?'error':'offline',message:navigator.onLine?syncErrorMessage(e):'Sem conexão. As alterações serão enviadas quando a conexão voltar.',pending:pendingChanges(userId).length,conflicts:[],lastSynced:status.lastSynced});}
   finally{running=false;}
  };
  const schedule=()=>{if(!active||running)return;clearTimeout(timer);timer=setTimeout(()=>void run(),350);};

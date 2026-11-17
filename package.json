@@ -8,7 +8,7 @@
     "build": "tsc -b && node scripts/build-client.mjs && node scripts/build-server.mjs",
     "lint": "eslint .",
     "preview": "vite preview",
-    "test": "node scripts/test.mjs",
+    "test": "node scripts/test.mjs && node scripts/test-vercel-runtime.mjs",
     "start": "node server/start.mjs"
   },
   "dependencies": {
