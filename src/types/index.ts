@@ -201,6 +201,10 @@ export interface HabitLog {
 // ============================================================
 
 export interface Workout {
+  scheduled_date?: string;
+  start_date?: string;
+  days_of_week?: number[];
+  target_time?: string;
   id: string;
   user_id: string;
   name: string;
@@ -375,6 +379,7 @@ export const GOAL_AREAS = [
 // ============================================================
 
 export interface Note {
+  links?: string[];
   id: string;
   user_id: string;
   title: string;

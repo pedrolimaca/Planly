@@ -1,3 +1,5 @@
+import GrowthProjects from '../components/common/GrowthProjects';
+import { useDataRefresh } from '../hooks/useDataRefresh';
 import { useState, useEffect } from 'react';
 import {
   BookOpen, Plus, Play, Pause, RotateCcw, Clock,
@@ -42,9 +44,7 @@ export default function StudiesPage() {
     setProjects(getAllItems<Project>('projects', user.id));
   };
 
-  useEffect(() => {
-    loadProjects();
-  }, [user]);
+  useDataRefresh(loadProjects);
 
   // Pomodoro timer tick
   useEffect(() => {
@@ -165,6 +165,7 @@ export default function StudiesPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <GrowthProjects />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -180,7 +181,7 @@ export default function StudiesPage() {
       </div>
 
       {/* Grid: Pomodoro Timer & Projects */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) 1fr', gap: 'var(--space-6)', alignItems: 'flex-start' }}>
+      <div className="studies-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(280px, 340px) minmax(0, 1fr)', gap: 'var(--space-6)', alignItems: 'flex-start' }}>
         {/* Pomodoro Focus Timer Card */}
         <Card
           title={
@@ -375,7 +376,7 @@ export default function StudiesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Categoria</label>
-              <select className="input" value={category} onChange={e => setCategory(e.target.value as any)}>
+              <select className="input" value={category} onChange={e => setCategory(e.target.value as typeof category)}>
                 <option value="study">Estudo</option>
                 <option value="work">Trabalho</option>
                 <option value="personal">Pessoal</option>
@@ -383,7 +384,7 @@ export default function StudiesPage() {
             </div>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Prioridade</label>
-              <select className="input" value={priority} onChange={e => setPriority(e.target.value as any)}>
+              <select className="input" value={priority} onChange={e => setPriority(e.target.value as typeof priority)}>
                 <option value="low">Baixa</option>
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>

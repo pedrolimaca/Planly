@@ -1,11 +1,14 @@
+import { startCloudSync } from '../services/cloudSync';
+import { createItem, getAllItems, updateItem, subscribeToData } from '../services/storage';
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../services/supabase';
 import type { UserProfile, Theme } from '../types';
 import { APP_CONFIG } from '../config/app';
 
 interface AuthContextType {
   user: UserProfile | null;
   isAuthenticated: boolean;
+  isCloudAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -16,39 +19,44 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const AUTH_STORAGE_KEY = 'lifeos_auth';
-const USERS_STORAGE_KEY = 'lifeos_users';
-
-interface StoredUser {
-  id: string;
-  email: string;
-  password: string; // In production, this would be hashed server-side
-  display_name: string;
-}
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [cloudUserId,setCloudUserId]=useState<string>();
 
-  // Load session on mount
   useEffect(() => {
-    const savedAuth = localStorage.getItem(AUTH_STORAGE_KEY);
-    if (savedAuth) {
-      try {
-        const parsed = JSON.parse(savedAuth);
-        setUser(parsed);
-        import('../services/seedData').then(m => m.initializeSeedDataIfEmpty(parsed.id));
-      } catch {
-        localStorage.removeItem(AUTH_STORAGE_KEY);
-      }
-    } else {
-      // Create and set default demo profile for seamless experience
-      const demoUser = createDefaultProfile('demo-user-pedro', 'pedro@exemplo.com', 'Pedro Cavalcanti');
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(demoUser));
-      setUser(demoUser);
-      import('../services/seedData').then(m => m.initializeSeedDataIfEmpty(demoUser.id));
+    let active = true;
+    const restoreLocal = () => {
+      const raw = localStorage.getItem(AUTH_STORAGE_KEY);
+      try { if (raw) { const profile = JSON.parse(raw); if (profile.id === 'demo-user-pedro') { setUser(profile); return; } } } catch { /* Preserve corrupt data for recovery. */ }
+      const profile = createDefaultProfile('demo-user-pedro', '', 'Meu perfil local');
+      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(profile)); setUser(profile);
+    };
+    const applySession = (sessionUser: { id: string; email?: string } | undefined) => {
+      if (!active) return;
+      setCloudUserId(sessionUser?.id);
+      if (sessionUser) {
+        let profile = createDefaultProfile(sessionUser.id, sessionUser.email || '', sessionUser.email?.split('@')[0] || 'Meu perfil');
+        try { const saved = localStorage.getItem(`lifeos_profile_${sessionUser.id}`); if (saved) profile = { ...profile, ...JSON.parse(saved), id: sessionUser.id }; } catch { /* Keep default. */ }
+        setUser(profile);
+      } else restoreLocal();
+      setIsLoading(false);
+    };
+    if (supabase) {
+      supabase.auth.getSession().then(({ data }) => applySession(data.session?.user)).catch(() => applySession(undefined));
+      const { data } = supabase.auth.onAuthStateChange((_event, session) => applySession(session?.user));
+      return () => { active = false; data.subscription.unsubscribe(); };
     }
-    setIsLoading(false);
+    applySession(undefined);
+    return () => { active = false; };
   }, []);
+
+  useEffect(()=>{
+    if(!cloudUserId)return;
+    const stop=startCloudSync(cloudUserId);
+    const refresh=()=>{const profile=getAllItems<UserProfile>('profile',cloudUserId).find(p=>p.id===cloudUserId);if(profile)setUser(prev=>{if(prev?.id!==cloudUserId)return prev;const next={...profile,id:cloudUserId,email:prev.email};return JSON.stringify(next)===JSON.stringify(prev)?prev:next;});};
+    const unsubscribe=subscribeToData(refresh);refresh();return()=>{unsubscribe();stop();};
+  },[cloudUserId]);
 
   // Apply theme when user changes
   useEffect(() => {
@@ -56,93 +64,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     document.documentElement.setAttribute('data-theme', theme);
   }, [user?.theme]);
 
-  const getUsers = (): StoredUser[] => {
-    try {
-      const data = localStorage.getItem(USERS_STORAGE_KEY);
-      return data ? JSON.parse(data) : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const saveUsers = (users: StoredUser[]) => {
-    localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
-  };
-
   const login = useCallback(async (email: string, password: string) => {
-    // Simulate async
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const users = getUsers();
-    const found = users.find(u => u.email === email.toLowerCase() && u.password === password);
-    
-    if (!found) {
-      return { success: false, error: 'E-mail ou senha incorretos.' };
-    }
-
-    const profileKey = `lifeos_profile_${found.id}`;
-    let profile: UserProfile;
-    
-    const savedProfile = localStorage.getItem(profileKey);
-    if (savedProfile) {
-      profile = JSON.parse(savedProfile);
-    } else {
-      profile = createDefaultProfile(found.id, found.email, found.display_name);
-      localStorage.setItem(profileKey, JSON.stringify(profile));
-    }
-
-    setUser(profile);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(profile));
-    return { success: true };
+    if (!supabase) return { success: false, error: 'Configure Supabase para autenticar. O perfil local não usa senha.' };
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { success: !error, error: error?.message };
   }, []);
-
   const register = useCallback(async (name: string, email: string, password: string) => {
-    await new Promise(resolve => setTimeout(resolve, 500));
-
-    const users = getUsers();
-    const exists = users.find(u => u.email === email.toLowerCase());
-    
-    if (exists) {
-      return { success: false, error: 'Este e-mail já está cadastrado.' };
-    }
-
-    const newUser: StoredUser = {
-      id: uuidv4(),
-      email: email.toLowerCase(),
-      password,
-      display_name: name,
-    };
-
-    users.push(newUser);
-    saveUsers(users);
-
-    const profile = createDefaultProfile(newUser.id, newUser.email, newUser.display_name);
-    localStorage.setItem(`lifeos_profile_${newUser.id}`, JSON.stringify(profile));
-    
-    setUser(profile);
-    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(profile));
-    return { success: true };
+    if (!supabase) return { success: false, error: 'Configure Supabase para criar uma conta.' };
+    const { error } = await supabase.auth.signUp({ email, password, options: { data: { display_name: name } } });
+    return { success: !error, error: error?.message };
   }, []);
 
   const logout = useCallback(() => {
-    setUser(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
+    setCloudUserId(undefined);
+    void supabase?.auth.signOut();
+    const local = createDefaultProfile('demo-user-pedro', '', 'Meu perfil local');
+    setUser(local);
+    localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(local));
   }, []);
 
   const updateProfile = useCallback((updates: Partial<UserProfile>) => {
-    setUser(prev => {
-      if (!prev) return null;
-      const updated = { ...prev, ...updates, updated_at: new Date().toISOString() };
-      localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(updated));
-      localStorage.setItem(`lifeos_profile_${prev.id}`, JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+    if(!user)return;
+    const updated={...user,...updates,id:user.id,email:user.email,updated_at:new Date().toISOString()};
+    if(!updateItem<UserProfile>('profile',user.id,user.id,updated))createItem<UserProfile>('profile',user.id,updated);
+    localStorage.setItem(AUTH_STORAGE_KEY,JSON.stringify(updated));
+    localStorage.setItem(`lifeos_profile_${user.id}`,JSON.stringify(updated));
+    setUser(updated);
+  },[user]);
 
   return (
     <AuthContext.Provider value={{
       user,
       isAuthenticated: !!user,
+      isCloudAuthenticated: !!cloudUserId,
       isLoading,
       login,
       register,

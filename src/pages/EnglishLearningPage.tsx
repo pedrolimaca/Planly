@@ -1,3 +1,6 @@
+import { useAuth } from '../contexts/AuthContext';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { getAllItems, createItem, updateItem } from '../services/storage';
 import { useState, useEffect } from 'react';
 import {
   BookOpen, Globe, Headphones, Music, Star, ChevronDown, ChevronUp,
@@ -197,6 +200,7 @@ function LevelBadge({ level }: { level: string }) {
 
 /* ─── Page ─────────────────────────────────────────────── */
 export default function EnglishLearningPage() {
+  const {user}=useAuth();
   const [tab, setTab] = useState<'songs' | 'news' | 'vocab'>('songs');
   const [expandedSong, setExpandedSong] = useState<number | null>(null);
   const [learnedWords, setLearnedWords] = useState<string[]>([]);
@@ -205,19 +209,24 @@ export default function EnglishLearningPage() {
 
 
   useEffect(() => {
-    const saved = localStorage.getItem('planly_english_learned');
-    if (saved) setLearnedWords(JSON.parse(saved));
+
     // Pick phrase based on day of year
     const day = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / 86400000);
     setTodayPhrase(day % dailyPhrases.length);
   }, []);
 
-  const toggleLearned = (word: string) => {
-    setLearnedWords(prev => {
-      const updated = prev.includes(word) ? prev.filter(w => w !== word) : [...prev, word];
-      localStorage.setItem('planly_english_learned', JSON.stringify(updated));
-      return updated;
-    });
+  useDataRefresh(()=>{
+    if(!user)return;
+    const saved=getAllItems<{id:string;words:string[]}>('english_progress',user.id)[0];
+    if(saved){setLearnedWords(saved.words);return;}
+    if(user.id==='demo-user-pedro'){try{const old=localStorage.getItem('planly_english_learned');if(old){const words=JSON.parse(old);if(Array.isArray(words)){createItem<{id:string;words:string[]}>('english_progress',user.id,{id:'vocabulary',words});setLearnedWords(words);localStorage.removeItem('planly_english_learned');return;}}}catch{/* Keep legacy data. */}}
+    setLearnedWords([]);
+  });
+  const toggleLearned=(word:string)=>{
+    if(!user)return;
+    const words=learnedWords.includes(word)?learnedWords.filter(w=>w!==word):[...learnedWords,word];
+    if(!updateItem<{id:string;words:string[]}>('english_progress',user.id,'vocabulary',{words}))createItem<{id:string;words:string[]}>('english_progress',user.id,{id:'vocabulary',words});
+    setLearnedWords(words);
   };
 
   const tabs = [
@@ -268,7 +277,7 @@ export default function EnglishLearningPage() {
       </div>
 
       {/* Tab bar */}
-      <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--border-color)', paddingBottom: 0 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 24, borderBottom: '1px solid var(--border-color)', paddingBottom: 0 }}>
         {tabs.map(t => (
           <button
             key={t.id}

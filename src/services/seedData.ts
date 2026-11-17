@@ -1,3 +1,4 @@
+import { createItem, clearCollection, getAllItems } from './storage';
 import { format, subDays, addDays } from 'date-fns';
 import { v4 as uuidv4 } from 'uuid';
 import type {
@@ -7,8 +8,7 @@ import type {
 } from '../types';
 
 export function initializeSeedDataIfEmpty(userId: string): void {
-  const tasksKey = `lifeos_${userId}_tasks`;
-  if (localStorage.getItem(tasksKey)) {
+  if (getAllItems('tasks',userId).length) {
     return; // Already initialized
   }
 
@@ -109,7 +109,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(tasksKey, JSON.stringify(tasks));
+  tasks.forEach(item=>createItem('tasks',userId,item));
 
   // 2. Events (Calendar)
   const events: CalendarEvent[] = [
@@ -178,7 +178,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_events`, JSON.stringify(events));
+  events.forEach(item=>createItem('events',userId,item));
 
   // 3. Reminders
   const reminders: Reminder[] = [
@@ -229,7 +229,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_reminders`, JSON.stringify(reminders));
+  reminders.forEach(item=>createItem('reminders',userId,item));
 
   // 4. Finance (Entries & Budgets)
   const finance: FinanceEntry[] = [
@@ -320,7 +320,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_finance`, JSON.stringify(finance));
+  finance.forEach(item=>createItem('finance',userId,item));
 
   const budgets: Budget[] = [
     { id: uuidv4(), user_id: userId, category: 'Moradia', month: currentMonthStr, amount: 2500, created_at: new Date().toISOString() },
@@ -330,7 +330,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
     { id: uuidv4(), user_id: userId, category: 'Lazer', month: currentMonthStr, amount: 500, created_at: new Date().toISOString() },
     { id: uuidv4(), user_id: userId, category: 'Assinaturas', month: currentMonthStr, amount: 350, created_at: new Date().toISOString() },
   ];
-  localStorage.setItem(`lifeos_${userId}_budgets`, JSON.stringify(budgets));
+  budgets.forEach(item=>createItem('budgets',userId,item));
 
   // 5. Habits & Habit Logs
   const habit1Id = uuidv4();
@@ -392,7 +392,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_habits`, JSON.stringify(habits));
+  habits.forEach(item=>createItem('habits',userId,item));
 
   const habitLogs: HabitLog[] = [
     // Yesterday
@@ -410,7 +410,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
     { id: uuidv4(), habit_id: habit2Id, user_id: userId, date: todayStr, completed: true, created_at: new Date().toISOString() },
     { id: uuidv4(), habit_id: habit3Id, user_id: userId, date: todayStr, completed: true, created_at: new Date().toISOString() },
   ];
-  localStorage.setItem(`lifeos_${userId}_habit_logs`, JSON.stringify(habitLogs));
+  habitLogs.forEach(item=>createItem('habit_logs',userId,item));
 
   // 6. Workouts
   const workoutAId = uuidv4();
@@ -453,7 +453,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       ],
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_workouts`, JSON.stringify(workouts));
+  workouts.forEach(item=>createItem('workouts',userId,item));
 
   const workoutLogs: WorkoutLog[] = [
     {
@@ -473,7 +473,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       created_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_workout_logs`, JSON.stringify(workoutLogs));
+  workoutLogs.forEach(item=>createItem('workout_logs',userId,item));
 
   // 7. Nutrition
   const meals: Meal[] = [
@@ -542,7 +542,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_meals`, JSON.stringify(meals));
+  meals.forEach(item=>createItem('meals',userId,item));
 
   // 8. Health
   const healthRecords: HealthRecord[] = [
@@ -589,7 +589,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_health`, JSON.stringify(healthRecords));
+  healthRecords.forEach(item=>createItem('health',userId,item));
 
   // 9. Studies & Projects
   const projects: Project[] = [
@@ -622,7 +622,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_projects`, JSON.stringify(projects));
+  projects.forEach(item=>createItem('projects',userId,item));
 
   // 10. Spiritual Life
   const spiritual: SpiritualActivity[] = [
@@ -668,7 +668,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_spiritual`, JSON.stringify(spiritual));
+  spiritual.forEach(item=>createItem('spiritual',userId,item));
 
   // 11. Goals & Milestones
   const goal1Id = uuidv4();
@@ -716,7 +716,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       ],
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_goals`, JSON.stringify(goals));
+  goals.forEach(item=>createItem('goals',userId,item));
 
   // 12. Notes
   const notes: Note[] = [
@@ -741,7 +741,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       updated_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_notes`, JSON.stringify(notes));
+  notes.forEach(item=>createItem('notes',userId,item));
 
   // 13. Notifications
   const notifications: AppNotification[] = [
@@ -764,7 +764,7 @@ export function initializeSeedDataIfEmpty(userId: string): void {
       created_at: new Date().toISOString(),
     },
   ];
-  localStorage.setItem(`lifeos_${userId}_notifications`, JSON.stringify(notifications));
+  notifications.forEach(item=>createItem('notifications',userId,item));
 }
 
 export function resetToSeedData(userId: string): void {
@@ -775,7 +775,7 @@ export function resetToSeedData(userId: string): void {
     'notifications'
   ];
   collections.forEach(col => {
-    localStorage.removeItem(`lifeos_${userId}_${col}`);
+    clearCollection(col,userId);
   });
   initializeSeedDataIfEmpty(userId);
 }

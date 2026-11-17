@@ -1,8 +1,12 @@
-import { useState, useEffect } from 'react';
+import Notebook from '../components/common/Notebook';
+import DailyCatholicContent from '../components/common/DailyCatholicContent';
+import RosaryGuide from '../components/common/RosaryGuide';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   Church, Plus, CheckCircle2, Circle,
-  Trash2, Edit3, Sparkles, ScrollText, ExternalLink
+  Trash2, Edit3, Sparkles
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
@@ -47,9 +51,7 @@ export default function SpiritualPage() {
     setActivities(getAllItems<SpiritualActivity>('spiritual', user.id));
   };
 
-  useEffect(() => {
-    loadActivities();
-  }, [user]);
+  useDataRefresh(loadActivities);
 
   const openCreateModal = () => {
     setEditingActivity(null);
@@ -138,6 +140,8 @@ export default function SpiritualPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <RosaryGuide />
+      <Notebook spiritual />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -197,162 +201,7 @@ export default function SpiritualPage() {
       </div>
 
       {/* ── TAB 1: LITURGIA & EVANGELHO ── */}
-      {activeTab === 'liturgia' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {/* Saint of the Day */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(124, 58, 237, 0.08) 100%)',
-            borderRadius: 'var(--border-radius-lg)',
-            border: '1px solid rgba(168, 85, 247, 0.35)',
-            padding: '24px',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <Badge variant="primary" size="sm" style={{ marginBottom: 8 }}>
-                  ✝️ Santo do Dia & Santoral Católico
-                </Badge>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '4px 0', color: 'var(--text-primary)' }}>
-                  {catholicData.name}
-                </h2>
-                <span style={{ fontSize: '0.85rem', color: '#a855f7', fontWeight: 700 }}>
-                  {catholicData.title} • Festa Litúrgica: {catholicData.feastDate}
-                </span>
-              </div>
-            </div>
-
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 12 }}>
-              {catholicData.history}
-            </p>
-
-            <div style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-color)', marginTop: 14 }}>
-              <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a855f7', textTransform: 'uppercase', marginBottom: 4 }}>
-                Virtude a Cultivar Hoje:
-              </div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                {catholicData.virtue}
-              </div>
-            </div>
-
-            <div style={{
-              marginTop: 14, padding: '14px 16px', borderRadius: '10px',
-              backgroundColor: 'var(--surface-card)', borderLeft: '4px solid #a855f7',
-            }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
-                🙏 Oração Oficial ao Santo do Dia:
-              </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontStyle: 'italic', margin: 0, lineHeight: 1.6 }}>
-                "{catholicData.prayer}"
-              </p>
-            </div>
-          </div>
-
-          {/* Full Gospel */}
-          <div style={{
-            backgroundColor: 'var(--surface-card)',
-            borderRadius: 'var(--border-radius-lg)',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
-            padding: '24px',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: 'linear-gradient(90deg, #8b5cf6, #6366f1)' }} />
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: '12px', background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ScrollText size={22} />
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                    Evangelho do Dia por Completo
-                  </h3>
-                  <span style={{ fontSize: '0.82rem', color: '#8b5cf6', fontWeight: 700 }}>
-                    📖 {catholicData.gospel.reference} — {catholicData.gospel.title}
-                  </span>
-                </div>
-              </div>
-              <Badge variant="primary" size="sm">Lectio Divina</Badge>
-            </div>
-
-            <div style={{
-              padding: '12px 16px', borderRadius: '8px',
-              backgroundColor: 'rgba(139, 92, 246, 0.08)', borderLeft: '4px solid #8b5cf6',
-              marginBottom: 16, fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)', fontStyle: 'italic'
-            }}>
-              "{catholicData.gospel.verseHighlight}"
-            </div>
-
-            <div style={{
-              backgroundColor: 'var(--surface-bg)',
-              borderRadius: 'var(--border-radius-md)',
-              padding: '18px 20px',
-              border: '1px solid var(--border-color)',
-              marginBottom: 16,
-            }}>
-              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10 }}>
-                Proclamação do Santo Evangelho de Jesus Cristo
-              </div>
-              <div style={{
-                fontSize: '0.92rem',
-                color: 'var(--text-primary)',
-                lineHeight: 1.8,
-                whiteSpace: 'pre-line',
-                fontFamily: 'serif'
-              }}>
-                {catholicData.gospel.text}
-              </div>
-            </div>
-
-            <div style={{
-              padding: '14px 16px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--surface-bg)',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#8b5cf6', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Sparkles size={14} /> Meditação da Igreja & Aplicação para a sua Vida:
-              </div>
-              <p style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                {catholicData.gospel.reflection}
-              </p>
-            </div>
-          </div>
-
-          {/* Pregação Católica */}
-          <Card title="Pregação Católica Recomendada" subtitle="Formação sólida para a sua vida de oração">
-            <div style={{ padding: '14px', borderRadius: '10px', backgroundColor: 'var(--surface-bg)', border: '1px solid var(--border-color)', marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <Badge variant="secondary" size="sm">{catholicData.sermonRecommendation.topic}</Badge>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                  ⏱️ {catholicData.sermonRecommendation.duration}
-                </span>
-              </div>
-              <h4 style={{ fontSize: '0.95rem', fontWeight: 800, margin: '4px 0 6px', color: 'var(--text-primary)' }}>
-                "{catholicData.sermonRecommendation.title}"
-              </h4>
-              <div style={{ fontSize: '0.8rem', color: '#a855f7', fontWeight: 700, marginBottom: 8 }}>
-                🎙️ {catholicData.sermonRecommendation.preacher}
-              </div>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
-                {catholicData.sermonRecommendation.description}
-              </p>
-            </div>
-            <a
-              href={`https://www.youtube.com/results?search_query=${encodeURIComponent(catholicData.sermonRecommendation.searchQuery)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                padding: '10px 16px', borderRadius: '8px',
-                background: 'linear-gradient(135deg, #a855f7 0%, #7c3aed 100%)',
-                color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', textDecoration: 'none',
-              }}
-            >
-              Assistir Pregação no YouTube <ExternalLink size={14} />
-            </a>
-          </Card>
-        </div>
-      )}
+      {activeTab === 'liturgia' && <DailyCatholicContent />}
 
       {/* ── TAB 2: OS 5 MISTÉRIOS DO TERÇO ── */}
       {activeTab === 'terco' && (
@@ -380,10 +229,10 @@ export default function SpiritualPage() {
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {[
                   { key: 'today', label: `Hoje: ${catholicData.rosary.mysteryName.split(' ')[1]}` },
-                  { key: 'joyful', label: 'Gozosos' },
-                  { key: 'sorrowful', label: 'Dolorosos' },
-                  { key: 'glorious', label: 'Gloriosos' },
-                  { key: 'luminous', label: 'Luminosos' },
+                  { key: 'gozosos', label: 'Gozosos' },
+                  { key: 'dolorosos', label: 'Dolorosos' },
+                  { key: 'gloriosos', label: 'Gloriosos' },
+                  { key: 'luminosos', label: 'Luminosos' },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -501,7 +350,7 @@ export default function SpiritualPage() {
               onAction={openCreateModal}
             />
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-4)' }}>
               {activities.map(activity => {
                 const isDone = activity.completed;
 
@@ -578,7 +427,7 @@ export default function SpiritualPage() {
         <form onSubmit={handleSaveActivity} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Tipo</label>
-            <select className="input" value={type} onChange={e => setType(e.target.value as any)}>
+            <select className="input" value={type} onChange={e => setType(e.target.value as typeof type)}>
               <option value="prayer">Oração</option>
               <option value="reading">Leitura Bíblica</option>
               <option value="rosary">Santo Terço</option>

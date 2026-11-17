@@ -1,3 +1,5 @@
+import { validateAttachment, type RemoteResult } from '../../services/agentValidation';
+import { executeConfirmedActions } from '../../services/aiAgentService';
 import React, { useState, useRef, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { LucideIcon } from 'lucide-react';
@@ -149,6 +151,7 @@ const moduleConfigs: Record<string, ModuleConfig> = {
     label: 'Academia e Saúde',
     greeting: 'Você está em **Academia e Saúde**. Posso criar treinos, registrar sessões concluídas e planejar sua semana na academia.',
     chips: [
+      { label: '📎 Importar minha ficha', prompt: 'Leia a ficha anexada e cadastre todos os meus treinos com exercícios, séries, repetições, cargas e descansos. Agende somente os dias e horários informados. Não invente dados ausentes.' },
       { label: '💪 Treino de peito (seg)', prompt: 'Criar treino de peito para segunda-feira' },
       { label: '🦵 Treino de perna (qua)', prompt: 'Criar treino de pernas para quarta-feira' },
       { label: '🏋️ Treino de costas (ter)', prompt: 'Criar treino de costas para terça-feira' },
@@ -473,6 +476,7 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
 
   const config = moduleConfigs[location.pathname] ?? defaultConfig;
 
+  const [proposal, setProposal] = useState<RemoteResult | null>(null);
   const [input, setInput] = useState('');
   const [attachment, setAttachment] = useState<AgentAttachment | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -516,7 +520,7 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
 
   const handleSendMessage = (textToSend?: string) => {
     const text = (textToSend || input).trim();
-    if (!text && !attachment) return;
+    if (isProcessing || proposal || (!text && !attachment)) return;
 
     const userMsg: ChatMessage = {
       id: String(Date.now()),
@@ -539,7 +543,10 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
         return;
       }
 
-      const response = await processAgentMessageWithAI(user.id, text, currentAttachment || undefined);
+      let response;
+      try { response = await processAgentMessageWithAI(user.id, text, currentAttachment || undefined); }
+      catch { response = { message: 'Não foi possível concluir a operação. Verifique os dados e o armazenamento antes de repetir.', error: true }; }
+      if (response.proposedActions) setProposal(response.proposedActions);
 
       const assistantMsg: ChatMessage = {
         id: String(Date.now() + 1),
@@ -579,8 +586,10 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    try { validateAttachment(file); } catch (error) { addToast({ type: 'error', title: String(error) }); e.target.value = ''; return; }
 
     const reader = new FileReader();
+    reader.onerror = () => addToast({ type: 'error', title: 'Não foi possível ler o arquivo.' });
     reader.onload = () => {
       const content = String(reader.result || '');
       setAttachment({
@@ -605,33 +614,6 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const handleSimulateAttachment = (type: 'receipt' | 'exam' | 'workout') => {
-    if (type === 'receipt') {
-      setAttachment({
-        name: 'Cupom_Fiscal_Restaurante.pdf',
-        size: 45200,
-        type: 'application/pdf',
-        content: 'Comprovante Fiscal - Restaurante Sabor & Vida Ltda - Total Pago: R$ 68,50 - Data: 23/10/2026 - Almoço Executivo + Suco Natural',
-      });
-      addToast({ type: 'info', title: 'Recibo anexado!', message: 'Toque em Enviar para extrair o valor e lançar nas Finanças.' });
-    } else if (type === 'exam') {
-      setAttachment({
-        name: 'Laudo_Exame_Sangue_Outubro.pdf',
-        size: 112000,
-        type: 'application/pdf',
-        content: 'Laboratório Central - Laudo de Exame de Sangue e Hemograma - Glicose em Jejum: 88 mg/dL - Colesterol Total: 172 mg/dL - Vitamina D: 42 ng/mL',
-      });
-      addToast({ type: 'info', title: 'Exame de sangue anexado!', message: 'Toque em Enviar para analisar seus biomarcadores.' });
-    } else if (type === 'workout') {
-      setAttachment({
-        name: 'Ficha_Hipertrofia_2026.txt',
-        size: 24000,
-        type: 'text/plain',
-        content: 'Ficha de Treino - Hipertrofia e Força - Supino Reto: 4x10 - Supino Inclinado com Halteres: 3x12 - Crucifixo na Polia: 3x15 - Tríceps Corda: 4x12',
-      });
-      addToast({ type: 'info', title: 'Ficha de treino anexada!', message: 'Toque em Enviar para importar seus exercícios.' });
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -1039,53 +1021,19 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
           </div>
         )}
 
-        {/* ── Demo File Analysis Shortcuts Strip ── */}
-        {!attachment && (
-          <div style={{
-            padding: '6px 16px',
-            backgroundColor: 'var(--surface-bg)',
-            borderTop: '1px solid var(--border-color)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            overflowX: 'auto',
-          }}>
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-tertiary)', whiteSpace: 'nowrap' }}>
-              📎 Testar Análise IA:
-            </span>
-            <button
-              onClick={() => handleSimulateAttachment('receipt')}
-              style={{
-                padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 600,
-                background: 'var(--surface-card)', border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              🧾 Recibo Fiscal
-            </button>
-            <button
-              onClick={() => handleSimulateAttachment('exam')}
-              style={{
-                padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 600,
-                background: 'var(--surface-card)', border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              🩺 Exame Sangue
-            </button>
-            <button
-              onClick={() => handleSimulateAttachment('workout')}
-              style={{
-                padding: '3px 8px', borderRadius: '6px', fontSize: '0.7rem', fontWeight: 600,
-                background: 'var(--surface-card)', border: '1px solid var(--border-color)',
-                color: 'var(--text-primary)', cursor: 'pointer', whiteSpace: 'nowrap',
-              }}
-            >
-              🏋️ Ficha Treino
-            </button>
-          </div>
-        )}
+        {proposal && <div style={{ padding: 16 }}>
+          <h3>Revisar ações antes de salvar</h3>
+          {proposal.actions.map((a, i) => <div key={i}><strong>{a.kind}: {a.title}</strong><p>{a.description} {a.date} {a.time} {a.amount !== null ? `R$ ${a.amount}` : ''}</p>{a.workout && <><p>{a.workout.days_of_week.length ? `Semanal: ${a.workout.days_of_week.map(d=>['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d]).join(', ')}` : a.date ? 'Sessão única no calendário' : 'Sem agendamento'}</p><ol>{a.workout.exercises.map((ex,j)=><li key={j}>{ex.name} — {ex.sets ?? '?'} séries · {ex.reps ?? 'repetições não informadas'}{ex.weight !== null ? ` · ${ex.weight} kg` : ''}{ex.rest_seconds !== null ? ` · descanso ${ex.rest_seconds}s` : ''}{ex.notes ? ` · ${ex.notes}` : ''}</li>)}</ol></>}</div>)}
+          <button className="btn btn-primary" onClick={() => {
+            if (!user) return;
+            const pending = proposal; setProposal(null);
+            try { const result = executeConfirmedActions(user.id, pending); setMessages(prev => [...prev, { id: crypto.randomUUID(), sender: 'assistant', text: result.message, timestamp: new Date().toLocaleTimeString(), actions: result.actionsExecuted }]); }
+            catch { addToast({ type: 'error', title: 'Falha ao salvar. Confira os registros antes de repetir; algumas ações podem ter sido salvas.' }); }
+          }}>Confirmar ações</button>
+          <button className="btn" onClick={() => setProposal(null)}>Cancelar</button>
+        </div>}
 
+        <p style={{ padding: '4px 16px', fontSize: '.75rem', color: 'var(--text-secondary)' }}>Consultas públicas e comandos locais não usam tokens. A IA remota pode gerar cobrança na conta da chave do servidor, mesmo sem confirmar as ações. Veja Configurações → IA: funcionamento e consumo.</p>
         {/* ── Input Bar ── */}
         <div style={{
           padding: '14px 16px',
@@ -1093,7 +1041,7 @@ export default function AIAgentDrawer({ isOpen, onClose, onRefreshData }: AIAgen
           background: 'var(--surface-card)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <input type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
+          <input accept=".txt,.md,.csv,.json,.pdf,.png,.jpg,.jpeg,.webp" type="file" ref={fileInputRef} onChange={handleFileUpload} style={{ display: 'none' }} />
 
           <button
             title="Anexar arquivo para análise inteligente"

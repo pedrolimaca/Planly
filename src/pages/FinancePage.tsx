@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import FinancialGoals from '../components/common/FinancialGoals';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   DollarSign, Plus, ArrowUpRight, ArrowDownRight, Clock,
@@ -48,9 +50,7 @@ export default function FinancePage() {
     setBudgets(getAllItems<Budget>('budgets', user.id));
   };
 
-  useEffect(() => {
-    loadFinance();
-  }, [user]);
+  useDataRefresh(loadFinance);
 
   // Calculations
   const currentMonthStr = format(new Date(), 'yyyy-MM');
@@ -171,6 +171,7 @@ export default function FinancePage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <FinancialGoals />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -299,7 +300,7 @@ export default function FinancePage() {
             <select
               className="input"
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
+              onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
               style={{ padding: '6px 12px', width: 'auto' }}
             >
               <option value="all">Todos os Status</option>
@@ -329,6 +330,7 @@ export default function FinancePage() {
               return (
                 <div
                   key={entry.id}
+                  className="finance-entry"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -421,7 +423,7 @@ export default function FinancePage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Tipo</label>
-              <select className="input" value={type} onChange={e => setType(e.target.value as any)}>
+              <select className="input" value={type} onChange={e => setType(e.target.value as typeof type)}>
                 <option value="expense">Despesa (-)</option>
                 <option value="income">Receita (+)</option>
               </select>
@@ -476,7 +478,7 @@ export default function FinancePage() {
 
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Status</label>
-              <select className="input" value={status} onChange={e => setStatus(e.target.value as any)}>
+              <select className="input" value={status} onChange={e => setStatus(e.target.value as typeof status)}>
                 <option value="paid">Pago / Efetuado</option>
                 <option value="pending">Pendente / Agendado</option>
                 <option value="received">Recebido</option>

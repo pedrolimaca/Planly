@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import {
   CheckSquare, Plus, Search, Filter, Kanban, List as ListIcon,
   Trash2, Edit3, CheckCircle2, Circle, Clock, Tag
@@ -48,9 +49,7 @@ export default function TasksPage() {
     setTasks(getAllItems<Task>('tasks', user.id));
   };
 
-  useEffect(() => {
-    loadTasks();
-  }, [user]);
+  useDataRefresh(loadTasks);
 
   const openCreateModal = () => {
     setEditingTask(null);
@@ -248,7 +247,7 @@ export default function TasksPage() {
             <select
               className="input"
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value as any)}
+              onChange={e => setStatusFilter(e.target.value as typeof statusFilter)}
               style={{ width: 'auto', padding: '6px 12px' }}
             >
               <option value="all">Todos os Status</option>
@@ -260,7 +259,7 @@ export default function TasksPage() {
             <select
               className="input"
               value={priorityFilter}
-              onChange={e => setPriorityFilter(e.target.value as any)}
+              onChange={e => setPriorityFilter(e.target.value as typeof priorityFilter)}
               style={{ width: 'auto', padding: '6px 12px' }}
             >
               <option value="all">Todas Prioridades</option>
@@ -273,7 +272,7 @@ export default function TasksPage() {
             <select
               className="input"
               value={categoryFilter}
-              onChange={e => setCategoryFilter(e.target.value as any)}
+              onChange={e => setCategoryFilter(e.target.value as typeof categoryFilter)}
               style={{ width: 'auto', padding: '6px 12px' }}
             >
               <option value="all">Todas Categorias</option>
@@ -311,7 +310,7 @@ export default function TasksPage() {
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flex: 1, minWidth: 0 }}>
                     <button
                       type="button"
                       onClick={() => handleToggleStatus(task)}
@@ -320,7 +319,7 @@ export default function TasksPage() {
                       {isCompleted ? <CheckCircle2 size={22} /> : <Circle size={22} />}
                     </button>
 
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <h4
                           style={{
@@ -513,7 +512,7 @@ export default function TasksPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Categoria</label>
-              <select className="input" value={category} onChange={e => setCategory(e.target.value as any)}>
+              <select className="input" value={category} onChange={e => setCategory(e.target.value as typeof category)}>
                 <option value="work">Trabalho</option>
                 <option value="personal">Pessoal</option>
                 <option value="study">Estudos</option>
@@ -527,7 +526,7 @@ export default function TasksPage() {
 
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Prioridade</label>
-              <select className="input" value={priority} onChange={e => setPriority(e.target.value as any)}>
+              <select className="input" value={priority} onChange={e => setPriority(e.target.value as typeof priority)}>
                 <option value="low">Baixa</option>
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>

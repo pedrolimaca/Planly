@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   UtensilsCrossed, Plus, CheckCircle2, Circle, Trash2, Edit3,
@@ -46,9 +47,7 @@ export default function NutritionPage() {
     setMeals(getAllItems<Meal>('meals', user.id));
   };
 
-  useEffect(() => {
-    loadMeals();
-  }, [user]);
+  useDataRefresh(loadMeals);
 
   // Macro Totals
   const totalCalories = meals.reduce((acc, m) => acc + m.foods.reduce((sum, f) => sum + (f.calories || 0), 0), 0);
@@ -234,7 +233,7 @@ export default function NutritionPage() {
           onAction={openCreateModal}
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)' }}>
           {meals.map(meal => {
             const mealCalories = meal.foods.reduce((sum, f) => sum + (f.calories || 0), 0);
             const mealProtein = meal.foods.reduce((sum, f) => sum + (f.protein || 0), 0);
@@ -325,7 +324,7 @@ export default function NutritionPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Tipo de Refeição</label>
-              <select className="input" value={mealType} onChange={e => setMealType(e.target.value as any)}>
+              <select className="input" value={mealType} onChange={e => setMealType(e.target.value as typeof mealType)}>
                 <option value="breakfast">Café da Manhã</option>
                 <option value="morning_snack">Lanche da Manhã</option>
                 <option value="lunch">Almoço</option>

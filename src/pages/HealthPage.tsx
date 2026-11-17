@@ -1,4 +1,6 @@
-import { useState, useEffect } from 'react';
+import SelfCare from '../components/common/SelfCare';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   Heart, Plus, MapPin, User,
@@ -42,9 +44,7 @@ export default function HealthPage() {
     setRecords(getAllItems<HealthRecord>('health', user.id));
   };
 
-  useEffect(() => {
-    loadRecords();
-  }, [user]);
+  useDataRefresh(loadRecords);
 
   const openCreateModal = () => {
     setEditingRecord(null);
@@ -144,6 +144,7 @@ export default function HealthPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <SelfCare />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -187,7 +188,7 @@ export default function HealthPage() {
           onAction={openCreateModal}
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-4)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-4)' }}>
           {filteredRecords.map(record => {
             const isCompleted = record.status === 'completed';
 
@@ -273,7 +274,7 @@ export default function HealthPage() {
         <form onSubmit={handleSaveRecord} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
             <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Tipo</label>
-            <select className="input" value={type} onChange={e => setType(e.target.value as any)}>
+            <select className="input" value={type} onChange={e => setType(e.target.value as typeof type)}>
               <option value="appointment">Consulta Médica</option>
               <option value="exam">Exame Laboratorial / Imagem</option>
               <option value="medication">Medicamento / Suplemento</option>

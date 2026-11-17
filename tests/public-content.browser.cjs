@@ -1,0 +1,52 @@
+// Optional live integration check. Requires Playwright and a Chrome/Chromium binary.
+const { chromium } = require(process.env.PLANLY_PLAYWRIGHT_PATH || 'playwright');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const base = process.env.PLANLY_TEST_URL || 'http://127.0.0.1:4173';
+(async () => {
+  const browser = await chromium.launch({ executablePath: process.env.PLANLY_CHROME_PATH, headless: true, args: ['--no-sandbox'] });
+  const report = { base, checkedAt: new Date().toISOString(), errors: [] };
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, timezoneId: 'America/Sao_Paulo' });
+    page.setDefaultTimeout(45000);
+    page.on('pageerror', error => report.errors.push(error.message));
+    await page.goto(base + '/radar', { waitUntil: 'domcontentloaded' });
+    const articles = page.getByRole('link', { name: 'Ler notícia original', exact: true });
+    await articles.first().waitFor();
+    report.newsCount = await articles.count();
+    report.firstNews = await articles.first().getAttribute('href');
+    assert.ok(report.newsCount > 0);
+    const refresh = page.getByRole('button', { name: 'Atualizar notícias', exact: true });
+    await refresh.click();
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent === 'Atualizar notícias' && !b.disabled));
+    report.afterRefresh = await articles.count();
+    assert.ok(report.afterRefresh > 0);
+    await page.route('**/api/public/news', route => route.fulfill({ status: 502, contentType: 'application/json', body: '{}' }));
+    await refresh.click();
+    await page.getByRole('alert').filter({ hasText: '502' }).waitFor();
+    report.failurePreservesNews = (await articles.count()) === report.afterRefresh;
+    assert.equal(report.failurePreservesNews, true);
+    await page.unroute('**/api/public/news');
+    await page.goto(base + '/spiritual', { waitUntil: 'domcontentloaded' });
+    const date = page.getByLabel('Data da liturgia');
+    await date.fill('2026-11-11');
+    await page.locator('.daily-catholic-content strong').filter({ hasText: '17,11-19' }).waitFor();
+    report.references = await page.locator('.daily-catholic-content article strong').allTextContents();
+    report.saints = await page.locator('.daily-catholic-content article').filter({ has: page.getByRole('link', { name: 'Ler a história completa na Vatican News', exact: true }) }).locator('h3').allTextContents();
+    assert.ok(report.saints.some(name => name.includes('Martinho')));
+    await page.getByRole('button', { name: 'Atualizar leituras e santos', exact: true }).click();
+    await page.waitForFunction(() => [...document.querySelectorAll('button')].some(b => b.textContent === 'Atualizar leituras e santos' && !b.disabled));
+    assert.ok((await page.locator('.daily-catholic-content article strong').allTextContents()).some(text => text.includes('17,11-19')));
+    await date.fill('2026-11-10');
+    await page.locator('.daily-catholic-content strong').filter({ hasText: '17,7-10' }).waitFor();
+    report.previousDateReferences = await page.locator('.daily-catholic-content article strong').allTextContents();
+    assert.ok(report.previousDateReferences.every(text => !text.includes('17,11-19')));
+    await page.setViewportSize({ width: 390, height: 844 });
+    report.mobile = await page.evaluate(() => ({ width: innerWidth, scrollWidth: document.documentElement.scrollWidth }));
+    assert.equal(report.mobile.width, report.mobile.scrollWidth);
+    assert.deepEqual(report.errors, []);
+    fs.mkdirSync('tests/results', { recursive: true });
+    fs.writeFileSync('tests/results/public-content-browser.json', JSON.stringify(report, null, 2) + '\n');
+    console.log(JSON.stringify(report, null, 2));
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

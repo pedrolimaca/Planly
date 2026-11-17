@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   CheckSquare, Flame, DollarSign, Download, Award
@@ -22,7 +23,7 @@ export default function ReportsPage() {
   const [goals, setGoals] = useState<Goal[]>([]);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
 
-  useEffect(() => {
+  useDataRefresh(() => {
     if (!user) return;
     setTasks(getAllItems<Task>('tasks', user.id));
     setHabits(getAllItems<Habit>('habits', user.id));
@@ -30,7 +31,7 @@ export default function ReportsPage() {
     setFinance(getAllItems<FinanceEntry>('finance', user.id));
     setGoals(getAllItems<Goal>('goals', user.id));
     setWorkoutLogs(getAllItems<WorkoutLog>('workout_logs', user.id));
-  }, [user]);
+  });
 
   // Analytics computations
   const completedTasks = tasks.filter(t => t.status === 'completed');
@@ -130,7 +131,7 @@ export default function ReportsPage() {
       </div>
 
       {/* Detailed Analysis Breakdown */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)' }}>
         {/* Productivity by Category */}
         <Card title="Distribuição de Tarefas por Categoria">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

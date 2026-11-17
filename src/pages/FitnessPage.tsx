@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   Dumbbell, Plus, Clock, Trash2, Edit3, CheckCircle2,
@@ -37,6 +38,8 @@ export default function FitnessPage() {
   const [workoutToDelete, setWorkoutToDelete] = useState<Workout | null>(null);
 
   // Form State
+  const [daysOfWeek, setDaysOfWeek] = useState<number[]>([]);
+  const [targetTime, setTargetTime] = useState('07:00');
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [muscleGroupsInput, setMuscleGroupsInput] = useState('');
@@ -55,12 +58,12 @@ export default function FitnessPage() {
     setWorkoutLogs(getAllItems<WorkoutLog>('workout_logs', user.id));
   };
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  useDataRefresh(loadData);
 
   const openCreateModal = () => {
     setEditingWorkout(null);
+    setDaysOfWeek([]);
+    setTargetTime('07:00');
     setName('');
     setDescription('');
     setMuscleGroupsInput('Peito, Tríceps, Ombros');
@@ -71,6 +74,8 @@ export default function FitnessPage() {
 
   const openEditModal = (w: Workout) => {
     setEditingWorkout(w);
+    setDaysOfWeek(w.days_of_week || []);
+    setTargetTime(w.target_time || '07:00');
     setName(w.name);
     setDescription(w.description || '');
     setMuscleGroupsInput(w.muscle_groups.join(', '));
@@ -113,6 +118,8 @@ export default function FitnessPage() {
         name: name.trim(),
         description: description.trim() || undefined,
         muscle_groups: muscleGroups,
+        days_of_week: daysOfWeek,
+        target_time: targetTime,
         duration_minutes: parseInt(durationMinutes) || 60,
         exercises: exercisesList,
       });
@@ -123,6 +130,8 @@ export default function FitnessPage() {
         name: name.trim(),
         description: description.trim() || undefined,
         muscle_groups: muscleGroups,
+        days_of_week: daysOfWeek,
+        target_time: targetTime,
         duration_minutes: parseInt(durationMinutes) || 60,
         active: true,
         exercises: exercisesList,
@@ -282,7 +291,7 @@ export default function FitnessPage() {
           onAction={openCreateModal}
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)' }}>
           {workouts.map(workout => (
             <Card
               key={workout.id}
@@ -309,6 +318,7 @@ export default function FitnessPage() {
                 </div>
               }
             >
+              <p>{workout.scheduled_date ? `Data: ${workout.scheduled_date}` : workout.days_of_week?.length ? `Dias: ${workout.days_of_week.map(d=>['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d]).join(', ')}` : 'Sem agendamento'}{workout.target_time ? ` às ${workout.target_time}` : ''}</p>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
                 {workout.muscle_groups.map(m => (
                   <Badge key={m} variant="secondary" size="sm">{m}</Badge>
@@ -324,7 +334,7 @@ export default function FitnessPage() {
                       style={{
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center',
+                        alignItems: 'center', flexWrap: 'wrap', gap: 8,
                         padding: '8px 10px',
                         borderRadius: 'var(--border-radius-sm)',
                         backgroundColor: 'var(--surface-bg)',
@@ -350,9 +360,11 @@ export default function FitnessPage() {
                         >
                           <HelpCircle size={11} /> Guia
                         </button>
+                        <a href={`https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name+' execução exercício musculação')}`} target="_blank" rel="noreferrer" aria-label={`Pesquisar ${ex.name} no YouTube`}>YouTube ↗</a>
                       </div>
+                      {ex.notes && <small>{ex.notes}</small>}
                       <span className="text-xs text-secondary font-semibold" style={{ flexShrink: 0, marginLeft: 8 }}>
-                        {ex.sets}x {ex.reps} {ex.weight ? `• ${ex.weight}kg` : ''}
+                        {ex.sets || 'Séries não informadas'}x {ex.reps} {ex.weight !== undefined ? `• ${ex.weight}kg` : ''}{ex.rest_seconds !== undefined ? ` • ${ex.rest_seconds}s descanso` : ''}
                       </span>
                     </div>
                   );
@@ -376,6 +388,7 @@ export default function FitnessPage() {
         }
       >
         <form onSubmit={handleSaveWorkout} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <fieldset><legend>Dias do treino</legend><div className="smart-actions">{['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((day, i) => <label key={day}><input type="checkbox" checked={daysOfWeek.includes(i)} onChange={() => setDaysOfWeek(days => days.includes(i) ? days.filter(d => d !== i) : [...days, i])} /> {day}</label>)}</div><label>Horário <input type="time" value={targetTime} onChange={e => setTargetTime(e.target.value)} required /></label></fieldset>
           <div>
             <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Nome do Treino</label>
             <input
@@ -473,7 +486,7 @@ export default function FitnessPage() {
                     fontSize: '0.85rem',
                   }}
                 >
-                  <span className="font-medium">{ex.name} ({ex.sets}x {ex.reps} {ex.weight ? `• ${ex.weight}kg` : ''})</span>
+                  <span className="font-medium">{ex.name} ({ex.sets || 'Séries não informadas'}x {ex.reps} {ex.weight !== undefined ? `• ${ex.weight}kg` : ''}{ex.rest_seconds !== undefined ? ` • ${ex.rest_seconds}s descanso` : ''})</span>
                   <Button type="button" variant="ghost" size="sm" onClick={() => removeExerciseFromForm(ex.id)} style={{ padding: 2 }}>
                     <Trash2 size={13} style={{ color: '#ef4444' }} />
                   </Button>

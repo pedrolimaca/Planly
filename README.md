@@ -1,3 +1,7 @@
+> Atualização de 17/11/2026: leia [Publicação na Vercel e sincronização entre dispositivos](DEPLOY_VERCEL.md). O aplicativo agora sincroniza dados por conta no Supabase, após instalar a migração `20261117_sync_records.sql`. A configuração remota ainda precisa ser validada. O `vercel.json` inclui a API pública de notícias, liturgia e música. A IA tem configuração e publicação próprias; consulte também [Integrações](INTEGRACOES_PLANLY.md).
+>
+> Novidades: Meu Dia Inteligente, treinos semanais compartilhados com calendário, rosário interativo, autocuidado ligado a hábitos, metas financeiras compartilhadas, biblioteca pessoal e projetos empreendedores. Execute `npm test`, `npm run lint` e `npm run build`.
+
 # Planly — Sistema Inteligente de Organização Pessoal
 
 Um verdadeiro **sistema operacional da sua vida pessoal**, moderno, responsivo e completo, desenvolvido em React 18, TypeScript, CSS Custom Tokens (Design System) e Vite.
@@ -88,7 +92,7 @@ O sistema centraliza todas as dimensões da rotina diária: tarefas, agenda, há
 - **Design Tokens & Estilização**: CSS Custom Properties moderno (paleta violeta/púrpura refinada com tons quentes inspirada nos mockups de referência).
 - **Ícones**: Lucide React.
 - **Manipulação de Datas**: `date-fns` com localização pt-BR.
-- **Banco de Dados**: Suporte dual — `localStorage` completo (persistência garantida e imediata) + scripts de migração PostgreSQL com RLS para Supabase em `supabase/migrations/`.
+- **Banco de Dados**: Suporte dual — `localStorage` completo (persistência neste navegador, sujeita a disponibilidade e quota do armazenamento) + scripts de migração PostgreSQL com RLS para Supabase em `supabase/migrations/`.
 
 ---
 

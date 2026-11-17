@@ -1,0 +1,10 @@
+{
+  "framework": "vite",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "functions": { "api/public.ts": { "maxDuration": 60 } },
+  "rewrites": [
+    { "source": "/api/public/:resource", "destination": "/api/public?resource=:resource" },
+    { "source": "/((?!api/).*)", "destination": "/index.html" }
+  ]
+}

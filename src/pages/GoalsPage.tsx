@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import {
   Target, Plus, CheckCircle2, Circle, Trash2, Edit3,
   Calendar
@@ -45,9 +46,7 @@ export default function GoalsPage() {
     setGoals(getAllItems<Goal>('goals', user.id));
   };
 
-  useEffect(() => {
-    loadGoals();
-  }, [user]);
+  useDataRefresh(loadGoals);
 
   const openCreateModal = () => {
     setEditingGoal(null);
@@ -218,7 +217,7 @@ export default function GoalsPage() {
           onAction={openCreateModal}
         />
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 'var(--space-6)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 340px), 1fr))', gap: 'var(--space-6)' }}>
           {filteredGoals.map(goal => (
             <Card
               key={goal.id}
@@ -340,7 +339,7 @@ export default function GoalsPage() {
             </div>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Prioridade</label>
-              <select className="input" value={priority} onChange={e => setPriority(e.target.value as any)}>
+              <select className="input" value={priority} onChange={e => setPriority(e.target.value as typeof priority)}>
                 <option value="low">Baixa</option>
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>

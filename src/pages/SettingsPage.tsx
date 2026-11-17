@@ -1,3 +1,7 @@
+import SyncStatus from '../components/common/SyncStatus';
+import { clearCollection, exportAllData } from '../services/storage';
+import AIUsageInfo from '../components/common/AIUsageInfo';
+import AccountAccess from '../components/common/AccountAccess';
 import { useRef, useState } from 'react';
 import {
   Moon, Sun, Database, RotateCcw, Trash2, Camera, UserRound
@@ -16,7 +20,7 @@ export default function SettingsPage() {
   const { addToast } = useToast();
 
   const [displayName, setDisplayName] = useState(user?.display_name || 'Pedro Cavalcanti');
-  const [email, setEmail] = useState(user?.email || 'pedro@exemplo.com');
+  const email = user?.email || '';
   const [theme, setTheme] = useState<'light' | 'dark'>(user?.theme || 'light');
   const [notifEnabled, setNotifEnabled] = useState(user?.notification_enabled ?? true);
   const [avatarUrl, setAvatarUrl] = useState(user?.avatar_url || '');
@@ -69,14 +73,9 @@ export default function SettingsPage() {
 
   const handleClearAllData = () => {
     if (!user) return;
-    const collections = [
-      'tasks', 'events', 'reminders', 'finance', 'budgets',
-      'habits', 'habit_logs', 'workouts', 'workout_logs',
-      'health', 'meals', 'spiritual', 'projects', 'goals', 'notes',
-      'notifications'
-    ];
+    const collections = Object.keys(exportAllData(user.id));
     collections.forEach(col => {
-      localStorage.removeItem(`lifeos_${user.id}_${col}`);
+      clearCollection(col,user.id);
     });
     setShowClearDialog(false);
     addToast({
@@ -93,6 +92,7 @@ export default function SettingsPage() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', maxWidth: 840, margin: '0 auto' }}>
+      <AccountAccess /><SyncStatus details /><AIUsageInfo />
       {/* Header */}
       <div>
         <h1 style={{ fontSize: '1.6rem', fontWeight: 800, margin: 0 }}>Configurações do Sistema</h1>
@@ -110,7 +110,7 @@ export default function SettingsPage() {
             </div>
             <div style={{ minWidth: 0 }}>
               <div className="font-semibold text-sm">Foto do perfil</div>
-              <p className="text-xs text-secondary" style={{ margin: '3px 0 8px' }}>PNG, JPG ou WebP de até 2 MB. A imagem fica salva neste navegador.</p>
+              <p className="text-xs text-secondary" style={{ margin: '3px 0 8px' }}>PNG, JPG ou WebP de até 2 MB. A imagem acompanha os dados do perfil na sincronização.</p>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <Button type="button" variant="outline" size="sm" onClick={() => avatarInputRef.current?.click()}><Camera size={14} /> Escolher foto</Button>
                 {avatarUrl && <Button type="button" variant="ghost" size="sm" onClick={() => setAvatarUrl('')}>Remover</Button>}
@@ -137,7 +137,8 @@ export default function SettingsPage() {
                 type="email"
                 className="input"
                 value={email}
-                onChange={e => setEmail(e.target.value)}
+                readOnly
+                title="E-mail da conta autenticada"
                 required
               />
             </div>
@@ -199,12 +200,12 @@ export default function SettingsPage() {
             <div>
               <div className="font-semibold text-sm">Modo de Persistência</div>
               <div className="text-xs text-secondary">
-                {hasSupabase ? 'Conectado à nuvem via Supabase PostgreSQL' : 'Local Storage Seguro (funciona offline e em qualquer navegador)'}
+                {hasSupabase ? 'Supabase configurado — confira o indicador de sincronização' : 'Perfil local — dados apenas neste navegador'}
               </div>
             </div>
           </div>
           <Badge variant={hasSupabase ? 'success' : 'primary'}>
-            {hasSupabase ? 'Supabase Ativo' : 'Local Offline'}
+            {hasSupabase ? 'Supabase configurado' : 'Local Offline'}
           </Badge>
         </div>
       </Card>

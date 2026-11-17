@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format, subDays, eachDayOfInterval } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
@@ -31,7 +32,7 @@ export default function HabitsPage() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<EventCategory>('health');
-  const [frequency, setFrequency] = useState<'daily' | 'weekly'>('daily');
+  const [frequency, setFrequency] = useState<Habit['frequency']>('daily');
   const [dailyGoal, setDailyGoal] = useState('1');
   const [color, setColor] = useState('#7c3aed');
 
@@ -47,9 +48,7 @@ export default function HabitsPage() {
     setHabitLogs(getAllItems<HabitLog>('habit_logs', user.id));
   };
 
-  useEffect(() => {
-    loadHabits();
-  }, [user]);
+  useDataRefresh(loadHabits);
 
   const handleToggleHabitDay = (habitId: string, day: Date) => {
     if (!user) return;
@@ -108,7 +107,7 @@ export default function HabitsPage() {
     setName(h.name);
     setDescription(h.description || '');
     setCategory(h.category);
-    setFrequency(h.frequency as any);
+    setFrequency(h.frequency);
     setDailyGoal(String(h.daily_goal || 1));
     setColor(h.color || '#7c3aed');
     setIsModalOpen(true);
@@ -368,7 +367,7 @@ export default function HabitsPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Categoria</label>
-              <select className="input" value={category} onChange={e => setCategory(e.target.value as any)}>
+              <select className="input" value={category} onChange={e => setCategory(e.target.value as typeof category)}>
                 <option value="health">Saúde</option>
                 <option value="fitness">Academia</option>
                 <option value="spiritual">Espiritual</option>

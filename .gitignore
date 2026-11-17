@@ -26,3 +26,9 @@ dist-ssr
 # Credenciais e configurações locais
 .env.local
 .env
+
+# Compiled Node content service
+dist-server/
+
+# Generated browser-test reports
+tests/results/

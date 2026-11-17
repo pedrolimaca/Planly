@@ -1,4 +1,6 @@
-import { useState, useEffect, useTransition } from 'react';
+import SmartDay from '../components/common/SmartDay';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -44,9 +46,7 @@ export default function DashboardPage() {
     setGoals(getAllItems<Goal>('goals', user.id));
   };
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
+  useDataRefresh(loadData);
 
   const handleToggleTask = (task: Task) => {
     if (!user) return;
@@ -69,8 +69,8 @@ export default function DashboardPage() {
   const completedTodayTasks = tasks.filter(t => t.status === 'completed' && t.completed_at?.startsWith(todayStr));
 
   const todayLogs = habitLogs.filter(l => l.date === todayStr && l.completed);
-  const activeHabits = habits.filter(h => h.active);
-  const habitCompletionRate = activeHabits.length > 0 ? Math.round((todayLogs.length / activeHabits.length) * 100) : 0;
+  const activeHabits = habits.filter(h => h.active && h.start_date <= todayStr && (!h.end_date || h.end_date >= todayStr) && (!h.days_of_week?.length || h.days_of_week.includes(new Date().getDay())));
+  const habitCompletionRate = activeHabits.length > 0 ? Math.round((activeHabits.filter(h => todayLogs.some(l => l.habit_id === h.id)).length / activeHabits.length) * 100) : 0;
 
   const currentMonth = format(new Date(), 'yyyy-MM');
   const monthEntries = finance.filter(f => f.date.startsWith(currentMonth));
@@ -85,6 +85,7 @@ export default function DashboardPage() {
 
   return (
     <div className="dashboard-page" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+      <SmartDay />
       {/* Welcome Banner 3D */}
       <div className="welcome-card-3d">
         <div style={{ position: 'relative', zIndex: 2 }}>

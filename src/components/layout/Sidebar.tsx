@@ -21,12 +21,14 @@ const navSections = [
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Visão Geral' },
       { to: '/my-day', icon: Sun, label: 'Meu Dia' },
+      { to: '/radar', icon: Globe, label: 'Radar do Dia' },
       { to: '/calendar', icon: CalendarDays, label: 'Calendário' },
     ]
   },
   {
     label: 'Organização',
     items: [
+      { to: '/notes', icon: BookOpen, label: 'Anotações' },
       { to: '/tasks', icon: CheckSquare, label: 'Tarefas' },
       { to: '/habits', icon: Timer, label: 'Rotinas e Hábitos' },
       { to: '/reminders', icon: Bell, label: 'Lembretes' },

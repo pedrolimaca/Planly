@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import { format } from 'date-fns';
 import {
   Bell, Plus, Clock, CheckCircle2, Trash2, Edit3,
@@ -40,9 +41,7 @@ export default function RemindersPage() {
     setReminders(getAllItems<Reminder>('reminders', user.id));
   };
 
-  useEffect(() => {
-    loadReminders();
-  }, [user]);
+  useDataRefresh(loadReminders);
 
   const openCreateModal = () => {
     setEditingReminder(null);
@@ -291,7 +290,7 @@ export default function RemindersPage() {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Categoria</label>
-              <select className="input" value={category} onChange={e => setCategory(e.target.value as any)}>
+              <select className="input" value={category} onChange={e => setCategory(e.target.value as typeof category)}>
                 <option value="personal">Pessoal</option>
                 <option value="health">Saúde</option>
                 <option value="finance">Finanças</option>
@@ -302,7 +301,7 @@ export default function RemindersPage() {
             </div>
             <div>
               <label className="text-xs font-semibold text-secondary uppercase mb-1 block">Prioridade</label>
-              <select className="input" value={priority} onChange={e => setPriority(e.target.value as any)}>
+              <select className="input" value={priority} onChange={e => setPriority(e.target.value as typeof priority)}>
                 <option value="low">Baixa</option>
                 <option value="medium">Média</option>
                 <option value="high">Alta</option>

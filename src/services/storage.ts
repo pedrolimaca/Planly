@@ -1,3 +1,4 @@
+import { readSyncStore, writeSyncedCollection, type RecordData } from './syncStore';
 /* ============================================================
    Local Storage Data Service
    
@@ -8,6 +9,14 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+export function subscribeToData(callback: () => void): () => void {
+  window.addEventListener('planly:data', callback);
+  window.addEventListener('storage', callback);
+  return () => { window.removeEventListener('planly:data', callback); window.removeEventListener('storage', callback); };
+}
+
+function notifyData() { queueMicrotask(() => window.dispatchEvent(new Event('planly:data'))); }
+
 const STORAGE_PREFIX = 'lifeos_';
 
 function getStorageKey(collection: string, userId: string): string {
@@ -15,12 +24,13 @@ function getStorageKey(collection: string, userId: string): string {
 }
 
 export function getAllItems<T>(collection: string, userId: string): T[] {
-  try {
-    const data = localStorage.getItem(getStorageKey(collection, userId));
-    return data ? JSON.parse(data) : [];
-  } catch {
-    return [];
-  }
+  const synced=readSyncStore(userId);
+  if(synced)return (synced.collections[collection]||[]) as T[];
+  const data = localStorage.getItem(getStorageKey(collection, userId));
+  if (!data) return [];
+  const parsed: unknown = JSON.parse(data);
+  if (!Array.isArray(parsed)) throw new Error(`Dados inválidos em ${collection}. Exporte o armazenamento antes de reparar.`);
+  return parsed as T[];
 }
 
 export function getItemById<T extends { id: string }>(collection: string, userId: string, id: string): T | null {
@@ -34,6 +44,7 @@ export function createItem<T extends { id: string }>(
   item: Omit<T, 'id' | 'created_at' | 'updated_at'> & { id?: string }
 ): T {
   const items = getAllItems<T>(collection, userId);
+  if(item.id && items.some(i=>i.id===item.id))throw new Error('Já existe um registro com este ID.');
   const now = new Date().toISOString();
   const newItem = {
     ...item,
@@ -42,7 +53,8 @@ export function createItem<T extends { id: string }>(
     updated_at: now,
   } as unknown as T;
   items.push(newItem);
-  localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(items));
+  if(!writeSyncedCollection(userId,collection,items as unknown as RecordData[]))localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(items));
+  notifyData();
   return newItem;
 }
 
@@ -63,7 +75,8 @@ export function updateItem<T extends { id: string }>(
     updated_at: new Date().toISOString(),
   };
   items[index] = updatedItem;
-  localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(items));
+  if(!writeSyncedCollection(userId,collection,items as unknown as RecordData[]))localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(items));
+  notifyData();
   return updatedItem;
 }
 
@@ -75,7 +88,8 @@ export function deleteItem<T extends { id: string }>(
   const items = getAllItems<T>(collection, userId);
   const filtered = items.filter(item => item.id !== id);
   if (filtered.length === items.length) return false;
-  localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(filtered));
+  if(!writeSyncedCollection(userId,collection,filtered as unknown as RecordData[]))localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(filtered));
+  notifyData();
   return true;
 }
 
@@ -87,7 +101,8 @@ export function deleteMultipleItems<T extends { id: string }>(
   const items = getAllItems<T>(collection, userId);
   const filtered = items.filter(item => !ids.includes(item.id));
   const deletedCount = items.length - filtered.length;
-  localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(filtered));
+  if(!writeSyncedCollection(userId,collection,filtered as unknown as RecordData[]))localStorage.setItem(getStorageKey(collection, userId), JSON.stringify(filtered));
+  notifyData();
   return deletedCount;
 }
 
@@ -109,7 +124,8 @@ export function countItems<T>(
 }
 
 export function clearCollection(collection: string, userId: string): void {
-  localStorage.removeItem(getStorageKey(collection, userId));
+  if(!writeSyncedCollection(userId,collection,[]))localStorage.removeItem(getStorageKey(collection, userId));
+  notifyData();
 }
 
 export function exportAllData(userId: string): Record<string, unknown[]> {
@@ -117,9 +133,16 @@ export function exportAllData(userId: string): Record<string, unknown[]> {
     'tasks', 'events', 'reminders', 'finance', 'budgets',
     'habits', 'habit_logs', 'workouts', 'workout_logs',
     'health', 'meals', 'spiritual', 'projects', 'goals', 'notes',
-    'notifications'
+    'notifications', 'day_preferences', 'self_care', 'content_library', 'agent_history'
   ];
   
+  const synced=readSyncStore(userId);
+  if(synced)for(const collection of Object.keys(synced.collections))if(!collections.includes(collection))collections.push(collection);
+  const prefix = `${STORAGE_PREFIX}${userId}_`;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(prefix) && !collections.includes(key.slice(prefix.length))) collections.push(key.slice(prefix.length));
+  }
   const data: Record<string, unknown[]> = {};
   collections.forEach(collection => {
     data[collection] = getAllItems(collection, userId);

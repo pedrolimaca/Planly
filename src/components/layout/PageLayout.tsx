@@ -1,3 +1,4 @@
+import SyncStatus from '../common/SyncStatus';
 import { useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import Sidebar from './Sidebar';
@@ -46,6 +47,7 @@ export default function PageLayout({
         />
 
         <main className="page-container">
+          <SyncStatus />
           {children}
         </main>
       </div>

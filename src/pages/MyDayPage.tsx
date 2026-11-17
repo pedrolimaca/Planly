@@ -1,4 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { getGuitarTask } from '../services/guitarPractice';
+import DailyCatholicContent from '../components/common/DailyCatholicContent';
+import { workoutsOn } from '../services/dayPlanner';
+import type { Workout } from '../types';
+import SmartDay from '../components/common/SmartDay';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { format, addDays, subDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -8,7 +14,7 @@ import {
   Flame, Music2, Globe, CalendarDays, DollarSign,
   ArrowRight, Sparkles, Check, BookOpen, ExternalLink,
   Shield, TrendingUp, Newspaper, Compass, HelpCircle,
-  Target, ScrollText, Play, Clock, Moon, Zap
+  Target, Play, Clock, Moon, Zap
 } from 'lucide-react';
 import Card from '../components/common/Card';
 import Badge from '../components/common/Badge';
@@ -21,7 +27,7 @@ import { getAllItems, updateItem, createItem } from '../services/storage';
 import {
   getDailyCatholicContext,
   allRosaryMysteries,
-  dailyHighImpactGoals,
+  getDailyGoals,
   findExerciseGuide,
   curatedNews24h,
   transformationProtocols,
@@ -42,6 +48,8 @@ export default function MyDayPage() {
 
   const [currentDate, setCurrentDate] = useState(new Date());
   const dateStr = format(currentDate, 'yyyy-MM-dd');
+  const dailyHighImpactGoals = getDailyGoals(currentDate);
+  const guitarTask = user ? getGuitarTask(user.id, dateStr) : undefined;
   const isToday = format(new Date(), 'yyyy-MM-dd') === dateStr;
 
   // Active Tab: Routine, Modules, Catholic, Transformation, Business/News
@@ -57,39 +65,15 @@ export default function MyDayPage() {
   const [completedGoals, setCompletedGoals] = useState<string[]>([]);
 
   // Completed routine blocks tracking (persisted by date)
-  const [completedRoutineBlocks, setCompletedRoutineBlocks] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(`planly_routine_${dateStr}`);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [completedRoutineBlocks,setCompletedRoutineBlocks]=useState<string[]>([]);
   const [routinePeriodFilter, setRoutinePeriodFilter] = useState<'all' | 'manha' | 'tarde' | 'noite'>('all');
-
-  const handleToggleRoutineBlock = (blockId: string) => {
-    setCompletedRoutineBlocks(prev => {
-      const next = prev.includes(blockId) ? prev.filter(id => id !== blockId) : [...prev, blockId];
-      try {
-        localStorage.setItem(`planly_routine_${dateStr}`, JSON.stringify(next));
-      } catch (e) {
-        console.error(e);
-      }
-      if (!prev.includes(blockId)) {
-        addToast({ type: 'success', title: 'Etapa concluída! Excelente disciplina e foco!' });
-      }
-      return next;
-    });
+  const handleToggleRoutineBlock=(blockId:string)=>{
+    if(!user)return;
+    const next=completedRoutineBlocks.includes(blockId)?completedRoutineBlocks.filter(id=>id!==blockId):[...completedRoutineBlocks,blockId];
+    const record={id:dateStr,blocks:next};
+    if(!updateItem<{id:string;blocks:string[]}>('routine',user.id,dateStr,record))createItem<{id:string;blocks:string[]}>('routine',user.id,record);
+    setCompletedRoutineBlocks(next);
   };
-
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`planly_routine_${dateStr}`);
-      setCompletedRoutineBlocks(saved ? JSON.parse(saved) : []);
-    } catch {
-      setCompletedRoutineBlocks([]);
-    }
-  }, [dateStr]);
 
   // Data from active modules
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -99,10 +83,10 @@ export default function MyDayPage() {
   const [finances, setFinances] = useState<FinanceEntry[]>([]);
 
   // Daily tracking states
-  const [waterGlasses, setWaterGlasses] = useState(4); // 4 * 250ml = 1000ml
+  const [waterGlasses, setWaterGlasses] = useState(0);
   const [guitarPracticed, setGuitarPracticed] = useState(false);
   const [englishCompleted, setEnglishCompleted] = useState(false);
-  const [spiritualDone, setSpiritualDone] = useState(false);
+  const [, setSpiritualDone] = useState(false);
   const [postureDone, setPostureDone] = useState(false);
   const [skincareDone, setSkincareDone] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
@@ -111,12 +95,18 @@ export default function MyDayPage() {
 
   const loadData = () => {
     if (!user) return;
+    const routine=getAllItems<{id:string;blocks:string[]}>('routine',user.id).find(r=>r.id===dateStr);
+    let blocks=routine?.blocks;
+    if(!blocks){try{const old=localStorage.getItem(`planly_routine_${user.id}_${dateStr}`);if(old){blocks=JSON.parse(old);createItem<{id:string;blocks:string[]}>('routine',user.id,{id:dateStr,blocks:blocks||[]});localStorage.removeItem(`planly_routine_${user.id}_${dateStr}`);}}catch{/* Preserve legacy data on failure. */}}
+    setCompletedRoutineBlocks(blocks||[]);
     setTasks(getAllItems<Task>('tasks', user.id));
     setHabits(getAllItems<Habit>('habits', user.id));
     setHabitLogs(getAllItems<HabitLog>('habit_logs', user.id));
     setEvents(getAllItems<CalendarEvent>('events', user.id));
     setFinances(getAllItems<FinanceEntry>('finance', user.id));
 
+    const water = getAllItems<{ id: string; glasses: number }>('water_' + dateStr, user.id)[0];
+    setWaterGlasses(water?.glasses || 0);
     const allTasks = getAllItems<Task>('tasks', user.id);
     setGuitarPracticed(allTasks.some(t => t.due_date === dateStr && t.status === 'completed' && /violão|guitarra/i.test(t.title)));
     setEnglishCompleted(allTasks.some(t => t.due_date === dateStr && t.status === 'completed' && /inglês|ingles|english/i.test(t.title)));
@@ -134,9 +124,7 @@ export default function MyDayPage() {
     setCompletedGoals(finishedGoalIds);
   };
 
-  useEffect(() => {
-    loadData();
-  }, [user, dateStr]);
+  useDataRefresh(loadData, dateStr);
 
   // Task actions
   const handleToggleTask = (task: Task) => {
@@ -198,10 +186,15 @@ export default function MyDayPage() {
   // Quick toggles for transformation activities
   const handleToggleActivity = (type: 'guitar' | 'english' | 'spiritual' | 'posture' | 'skincare') => {
     if (!user) return;
+    if (type === 'guitar') {
+      if (!guitarTask) { navigate('/guitar'); return; }
+      updateItem<Task>('tasks', user.id, guitarTask.id, { status: guitarTask.status === 'completed' ? 'pending' : 'completed', completed_at: guitarTask.status === 'completed' ? undefined : new Date().toISOString() });
+      return;
+    }
     const titles: Record<string, string> = {
-      guitar: 'Prática de Violão: Dust in the Wind & Travis Picking (30 min)',
+      guitar: 'Prática de Violão',
       english: 'Estudo Diário de Inglês: Vocabulário & Letra de Música',
-      spiritual: `Oração & Devoção: ${catholicData.name}`,
+      spiritual: 'Momento de oração pessoal',
       posture: 'Protocolo de Correção Postural e Alinhamento Cervical (5 min)',
       skincare: 'Rotina de Skincare Facial (Limpeza + Hidratação + Protetor)',
     };
@@ -225,7 +218,7 @@ export default function MyDayPage() {
       order_index: 0,
     });
 
-    if (type === 'guitar') setGuitarPracticed(true);
+
     if (type === 'english') setEnglishCompleted(true);
     if (type === 'spiritual') setSpiritualDone(true);
     if (type === 'posture') setPostureDone(true);
@@ -238,12 +231,20 @@ export default function MyDayPage() {
     if (!user) return;
     const isAlreadyDone = completedGoals.includes(goal.id);
     if (isAlreadyDone) {
+      const saved = tasks.find(t => t.due_date === dateStr && t.title === `[Meta do Dia] ${goal.title}`);
+      if (saved) updateItem<Task>('tasks', user.id, saved.id, { status: 'pending', completed_at: undefined });
       setCompletedGoals(prev => prev.filter(id => id !== goal.id));
       addToast({ type: 'info', title: 'Meta desmarcada.' });
       return;
     }
 
     setCompletedGoals(prev => [...prev, goal.id]);
+    const existing = tasks.find(t => t.due_date === dateStr && t.title === `[Meta do Dia] ${goal.title}`);
+    if (existing) {
+      updateItem<Task>('tasks', user.id, existing.id, { status: 'completed', completed_at: new Date().toISOString() });
+      addToast({ type: 'success', title: 'Desafio concluído!' });
+      return;
+    }
     createItem<Task>('tasks', user.id, {
       user_id: user.id,
       title: `[Meta do Dia] ${goal.title}`,
@@ -271,28 +272,21 @@ export default function MyDayPage() {
   const dayFinances = finances.filter(f => f.date === dateStr);
   const totalDaySpent = dayFinances.filter(f => f.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
 
-  // Workout by day of week
-  const dayOfWeek = currentDate.getDay();
-  const workoutPlanByDay: Record<number, { title: string; focus: string; exercises: string[] }> = {
-    0: { title: 'Descanso Ativo & Mobilidade', focus: 'Recuperação, alongamento e caminhada leve', exercises: ['Alongamento dinâmico (15 min)', 'Caminhada ao ar livre', 'Mobilidade de quadril'] },
-    1: { title: 'Treino A: Peito & Tríceps', focus: 'Hipertrofia e força de empurrar', exercises: ['Supino Reto com Barra (4x10)', 'Supino Inclinado com Halteres (3x12)', 'Crucifixo na Polia (3x15)', 'Tríceps Corda (4x12)'] },
-    2: { title: 'Treino B: Costas & Bíceps', focus: 'Largura dorsal e puxadas', exercises: ['Puxada Alta Frontal (4x10)', 'Remada Curvada com Barra (4x10)', 'Remada Baixa Triângulo (3x12)', 'Rosca Direta W (4x10)'] },
-    3: { title: 'Treino C: Pernas & Panturrilhas', focus: 'Membros inferiores e força base', exercises: ['Agachamento Livre (4x8-10)', 'Leg Press 45° (4x12)', 'Cadeira Extensora (3x15)', 'Elevação de Panturrilha em Pé (4x20)'] },
-    4: { title: 'Treino D: Ombros & Trapézio', focus: 'Deltóides completos e estabilidade', exercises: ['Desenvolvimento Militar com Halteres (4x10)', 'Elevação Lateral na Polia (4x15)', 'Crucifixo Invertido (3x12)', 'Encolhimento (4x15)'] },
-    5: { title: 'Treino E: Braços & Abdômen', focus: 'Isolamento de bíceps, tríceps e core', exercises: ['Super-série Rosca Alternada + Tríceps Francês (4x12)', 'Rosca Martelo (3x12)', 'Tríceps Testa (3x12)', 'Prancha Abdominal (4x1 min)'] },
-    6: { title: 'Cardio & Queima Intensa', focus: 'Condicionamento aeróbico e resistência', exercises: ['Corrida moderada (5km)', 'Bicicleta ergométrica (20 min)', 'Abdominal Supra e Infra (4x20)'] },
-  };
-  const todaysWorkout = workoutPlanByDay[dayOfWeek];
+  const plannedWorkouts = user ? workoutsOn(getAllItems<Workout>('workouts', user.id), dateStr) : [];
+  const todaysWorkout = { title: plannedWorkouts.map(w => w.name).join(' • ') || 'Nenhum treino agendado', focus: 'Configure dias e horários na Academia', exercises: plannedWorkouts.flatMap(w => w.exercises.map(e => `${e.name} (${e.sets}x${e.reps})`)) };
 
-  const totalHabits = habits.length;
-  const completedHabits = habits.filter(h => habitLogs.some(l => l.habit_id === h.id && l.date === dateStr && l.completed)).length;
+  const scheduledHabits = habits.filter(h => h.active && h.start_date <= dateStr && (!h.end_date || h.end_date >= dateStr) && (!h.days_of_week?.length || h.days_of_week.includes(currentDate.getDay())));
+  const totalHabits = scheduledHabits.length;
+  const completedHabits = scheduledHabits.filter(h => habitLogs.some(l => l.habit_id === h.id && l.date === dateStr && l.completed)).length;
   const overallScore = Math.min(100, Math.round(
-    ((completedDayTasks.length + (guitarPracticed ? 1 : 0) + (englishCompleted ? 1 : 0) + (spiritualDone ? 1 : 0) + completedHabits) /
-      Math.max(1, dayTasks.length + 3 + totalHabits)) * 100
+    ((completedDayTasks.length + completedHabits) /
+      Math.max(1, dayTasks.length + totalHabits)) * 100
   ));
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)', width: '100%', maxWidth: '100%' }}>
+      <SmartDay /><Button variant="outline" onClick={() => navigate('/radar')}>Consultar notícias reais no Radar do Dia</Button>
+
       {/* ── Date Navigation Strip ── */}
       <div
         style={{
@@ -378,7 +372,10 @@ export default function MyDayPage() {
               variant="outline"
               size="sm"
               onClick={() => {
-                setWaterGlasses(prev => prev + 1);
+                if (!user) return;
+                const value = { id: 'water', glasses: waterGlasses + 1 };
+                if (!updateItem('water_' + dateStr, user.id, 'water', value)) createItem('water_' + dateStr, user.id, value);
+                setWaterGlasses(value.glasses);
                 addToast({ type: 'success', title: `Hidratação registrada! (${(waterGlasses + 1) * 250}ml)` });
               }}
               style={{ whiteSpace: 'nowrap', padding: '5px 10px', fontSize: '0.75rem', fontWeight: 700 }}
@@ -416,7 +413,7 @@ export default function MyDayPage() {
             boxShadow: activeTab === 'routine' ? '0 2px 8px rgba(59, 130, 246, 0.35)' : 'none',
           }}
         >
-          <Clock size={16} /> ⏰ Rotina & Horários (O Que Fazer)
+          <Clock size={16} /> ⏰ Modelo de rotina (exemplo editável em Tarefas)
         </button>
 
         <button
@@ -852,9 +849,9 @@ export default function MyDayPage() {
                 <Badge variant={guitarPracticed ? 'success' : 'warning'} size="sm">{guitarPracticed ? 'Praticado Hoje' : 'Praticar Hoje'}</Badge>
               </div>
               <div style={{ backgroundColor: 'var(--surface-bg)', borderRadius: 'var(--border-radius-md)', padding: '12px 14px', border: '1px solid var(--border-color)', marginBottom: 14 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>🎵 Música: *Dust in the Wind* — Kansas</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: 6 }}>🖐️ **Técnica:** Dedilhado Travis Picking (C, Cmaj7, Cadd9, Am).</div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>⚡ **Solo:** *Hotel California* (Eagles) — Bends em Si menor.</div>
+                <p><strong>{guitarTask?.title || "Escolha uma música na biblioteca de violão"}</strong></p>
+                <p>{guitarTask?.practice_focus || "A prática escolhida e seu progresso aparecerão aqui."}</p>
+                <p>{guitarTask ? `${guitarTask.actual_minutes || 0} minutos registrados` : "Catálogo real, favoritos e sugestões diárias."}</p>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
@@ -1332,155 +1329,7 @@ export default function MyDayPage() {
       {/* ── TAB 2: CATHOLIC FAITH & SERMONS ── */}
       {activeTab === 'catholic' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-          {/* Saint of the day hero card */}
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(168, 85, 247, 0.15) 0%, rgba(124, 58, 237, 0.08) 100%)',
-            borderRadius: 'var(--border-radius-lg)',
-            border: '1px solid rgba(168, 85, 247, 0.35)',
-            padding: '24px',
-            position: 'relative',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
-              <div>
-                <Badge variant="primary" size="sm" style={{ marginBottom: 8 }}>
-                  ✝️ Liturgia Católica & Santoral
-                </Badge>
-                <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: '4px 0', color: 'var(--text-primary)' }}>
-                  {catholicData.name}
-                </h2>
-                <span style={{ fontSize: '0.85rem', color: '#a855f7', fontWeight: 700 }}>
-                  {catholicData.title} • Festa Litúrgica: {catholicData.feastDate}
-                </span>
-              </div>
-              <Button
-                variant={spiritualDone ? 'outline' : 'primary'}
-                size="sm"
-                onClick={() => handleToggleActivity('spiritual')}
-              >
-                {spiritualDone ? <Check size={16} /> : <Sparkles size={16} />}
-                {spiritualDone ? 'Oração Registrada Hoje' : 'Rezar & Registrar Oração'}
-              </Button>
-            </div>
-
-            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.6, marginTop: 12 }}>
-              {catholicData.history}
-            </p>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 12, marginTop: 16 }}>
-              <div style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#a855f7', textTransform: 'uppercase', marginBottom: 4 }}>
-                  Virtude do Santo para Praticar Hoje
-                </div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {catholicData.virtue}
-                </div>
-              </div>
-
-              <div style={{ padding: '12px 14px', borderRadius: '10px', backgroundColor: 'var(--surface-card)', border: '1px solid var(--border-color)' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#06b6d4', textTransform: 'uppercase', marginBottom: 4 }}>
-                  📿 Mistério Recomendado para Hoje
-                </div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  {catholicData.rosary.mysteryName} ({catholicData.rosary.days})
-                </div>
-              </div>
-            </div>
-
-            {/* Official Prayer Box */}
-            <div style={{
-              marginTop: 16, padding: '14px 16px', borderRadius: '10px',
-              backgroundColor: 'var(--surface-card)', borderLeft: '4px solid #a855f7',
-            }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
-                🙏 Oração ao Santo do Dia:
-              </div>
-              <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', fontStyle: 'italic', margin: 0, lineHeight: 1.6 }}>
-                "{catholicData.prayer}"
-              </p>
-            </div>
-          </div>
-
-          {/* ── EVANGELHO DO DIA POR COMPLETO ── */}
-          <div style={{
-            backgroundColor: 'var(--surface-card)',
-            borderRadius: 'var(--border-radius-lg)',
-            border: '1px solid rgba(139, 92, 246, 0.3)',
-            padding: '24px',
-            boxShadow: 'var(--shadow-sm)',
-            position: 'relative',
-            overflow: 'hidden'
-          }}>
-            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: 'linear-gradient(90deg, #8b5cf6, #6366f1)' }} />
-            
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ width: 42, height: 42, borderRadius: '12px', background: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <ScrollText size={22} />
-                </div>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-                      Evangelho do Dia por Completo
-                    </h3>
-                    <Badge variant="primary" size="sm">Lectio Divina</Badge>
-                  </div>
-                  <span style={{ fontSize: '0.82rem', color: '#8b5cf6', fontWeight: 700 }}>
-                    📖 {catholicData.gospel.reference} — {catholicData.gospel.title}
-                  </span>
-                </div>
-              </div>
-
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                Liturgia da Igreja Católica Apostólica Romana
-              </div>
-            </div>
-
-            {/* Verse Highlight Callout */}
-            <div style={{
-              padding: '12px 16px', borderRadius: '8px',
-              backgroundColor: 'rgba(139, 92, 246, 0.08)', borderLeft: '4px solid #8b5cf6',
-              marginBottom: 16, fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)', fontStyle: 'italic'
-            }}>
-              "{catholicData.gospel.verseHighlight}"
-            </div>
-
-            {/* Complete Gospel Text */}
-            <div style={{
-              backgroundColor: 'var(--surface-bg)',
-              borderRadius: 'var(--border-radius-md)',
-              padding: '18px 20px',
-              border: '1px solid var(--border-color)',
-              marginBottom: 16,
-            }}>
-              <div style={{ fontSize: '0.74rem', fontWeight: 800, color: 'var(--text-tertiary)', textTransform: 'uppercase', marginBottom: 10, letterSpacing: '0.5px' }}>
-                Proclamação do Santo Evangelho de Jesus Cristo
-              </div>
-              <div style={{
-                fontSize: '0.92rem',
-                color: 'var(--text-primary)',
-                lineHeight: 1.8,
-                whiteSpace: 'pre-line',
-                fontFamily: 'serif'
-              }}>
-                {catholicData.gospel.text}
-              </div>
-            </div>
-
-            {/* Pastoral / Spiritual Reflection */}
-            <div style={{
-              padding: '14px 16px',
-              borderRadius: '10px',
-              backgroundColor: 'var(--surface-card)',
-              border: '1px solid var(--border-color)'
-            }}>
-              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#8b5cf6', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Sparkles size={14} /> Meditação & Aplicação Prática para a sua Vida:
-              </div>
-              <p style={{ fontSize: '0.83rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                {catholicData.gospel.reflection}
-              </p>
-            </div>
-          </div>
+          <DailyCatholicContent date={dateStr} />
 
           {/* ── OS 5 MISTÉRIOS DO SANTO TERÇO EM DETALHES COMPLETOS ── */}
           <div style={{
@@ -1529,52 +1378,52 @@ export default function MyDayPage() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedRosaryTab('joyful')}
+                  onClick={() => setSelectedRosaryTab('gozosos')}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
                     cursor: 'pointer', border: '1px solid',
-                    backgroundColor: selectedRosaryTab === 'joyful' ? '#06b6d4' : 'var(--surface-bg)',
-                    color: selectedRosaryTab === 'joyful' ? '#ffffff' : 'var(--text-secondary)',
-                    borderColor: selectedRosaryTab === 'joyful' ? '#06b6d4' : 'var(--border-color)',
+                    backgroundColor: selectedRosaryTab === 'gozosos' ? '#06b6d4' : 'var(--surface-bg)',
+                    color: selectedRosaryTab === 'gozosos' ? '#ffffff' : 'var(--text-secondary)',
+                    borderColor: selectedRosaryTab === 'gozosos' ? '#06b6d4' : 'var(--border-color)',
                   }}
                 >
                   Gozosos
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedRosaryTab('sorrowful')}
+                  onClick={() => setSelectedRosaryTab('dolorosos')}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
                     cursor: 'pointer', border: '1px solid',
-                    backgroundColor: selectedRosaryTab === 'sorrowful' ? '#06b6d4' : 'var(--surface-bg)',
-                    color: selectedRosaryTab === 'sorrowful' ? '#ffffff' : 'var(--text-secondary)',
-                    borderColor: selectedRosaryTab === 'sorrowful' ? '#06b6d4' : 'var(--border-color)',
+                    backgroundColor: selectedRosaryTab === 'dolorosos' ? '#06b6d4' : 'var(--surface-bg)',
+                    color: selectedRosaryTab === 'dolorosos' ? '#ffffff' : 'var(--text-secondary)',
+                    borderColor: selectedRosaryTab === 'dolorosos' ? '#06b6d4' : 'var(--border-color)',
                   }}
                 >
                   Dolorosos
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedRosaryTab('glorious')}
+                  onClick={() => setSelectedRosaryTab('gloriosos')}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
                     cursor: 'pointer', border: '1px solid',
-                    backgroundColor: selectedRosaryTab === 'glorious' ? '#06b6d4' : 'var(--surface-bg)',
-                    color: selectedRosaryTab === 'glorious' ? '#ffffff' : 'var(--text-secondary)',
-                    borderColor: selectedRosaryTab === 'glorious' ? '#06b6d4' : 'var(--border-color)',
+                    backgroundColor: selectedRosaryTab === 'gloriosos' ? '#06b6d4' : 'var(--surface-bg)',
+                    color: selectedRosaryTab === 'gloriosos' ? '#ffffff' : 'var(--text-secondary)',
+                    borderColor: selectedRosaryTab === 'gloriosos' ? '#06b6d4' : 'var(--border-color)',
                   }}
                 >
                   Gloriosos
                 </button>
                 <button
                   type="button"
-                  onClick={() => setSelectedRosaryTab('luminous')}
+                  onClick={() => setSelectedRosaryTab('luminosos')}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
                     cursor: 'pointer', border: '1px solid',
-                    backgroundColor: selectedRosaryTab === 'luminous' ? '#06b6d4' : 'var(--surface-bg)',
-                    color: selectedRosaryTab === 'luminous' ? '#ffffff' : 'var(--text-secondary)',
-                    borderColor: selectedRosaryTab === 'luminous' ? '#06b6d4' : 'var(--border-color)',
+                    backgroundColor: selectedRosaryTab === 'luminosos' ? '#06b6d4' : 'var(--surface-bg)',
+                    color: selectedRosaryTab === 'luminosos' ? '#ffffff' : 'var(--text-secondary)',
+                    borderColor: selectedRosaryTab === 'luminosos' ? '#06b6d4' : 'var(--border-color)',
                   }}
                 >
                   Luminosos

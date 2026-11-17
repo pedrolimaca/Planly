@@ -1,3 +1,4 @@
+import { remoteResultSchema, validateAttachment, type RemoteResult } from './agentValidation';
 /* ============================================================
    Planly Intelligent Agent & Copilot Service
    
@@ -36,6 +37,8 @@ import type {
   HealthRecord,
   EventCategory,
   Priority,
+  Workout,
+  Note,
 } from '../types';
 
 export interface AgentAttachment {
@@ -58,6 +61,7 @@ export interface AgentResponse {
   suggestions?: string[];
   error?: boolean;
   requiresConfirmation?: boolean;
+  proposedActions?: RemoteResult;
 }
 
 export interface PlanlyDataSnapshot {
@@ -294,155 +298,7 @@ export function processAgentMessage(
   // ============================================================
   // 1. ATTACHMENT ANALYSIS
   // ============================================================
-  if (attachment) {
-    const content = attachment.content || '';
-    const name = attachment.name;
-
-    // Check for receipt / financial invoice in attachment
-    const moneyMatch = content.match(/r?\$?\s*([0-9]{1,4}(?:[.,][0-9]{2})?)/i) ||
-      content.match(/total:?\s*r?\$?\s*([0-9]+[.,]?[0-9]*)/i);
-    const hasExpenseKeywords = /(recibo|comprovante|nota|cupom|valor|pago|restaurante|farmacia|mercado|posto|uber)/i.test(content + ' ' + name);
-
-    if (hasExpenseKeywords && moneyMatch) {
-      const rawVal = moneyMatch[1].replace('.', '').replace(',', '.');
-      const val = parseFloat(rawVal) || 50.0;
-      const desc = `Despesa extraída de ${name}`;
-      
-      const newEntry = createItem<FinanceEntry>('finance', userId, {
-        user_id: userId,
-        description: desc,
-        amount: val,
-        type: 'expense',
-        category: 'Outros',
-        date: todayStr,
-        status: 'paid',
-        payment_method: 'Cartão / PIX',
-      });
-
-      executedActions.push({
-        type: 'create_finance',
-        title: `Despesa registrada: R$ ${val.toFixed(2)} (${desc})`,
-        link: '/finance',
-        data: newEntry as unknown as Record<string, unknown>,
-      });
-
-      return {
-        message: `📄 **Análise de Anexo Realizada!**\n\nAnalisei o documento **"${name}"** e identifiquei um comprovante/recibo financeiro.\n\n` +
-          `• **Valor Detectado:** R$ ${val.toFixed(2)}\n` +
-          `• **Ação Executada:** Registrado automaticamente em suas despesas do mês.\n\n` +
-          `Deseja ajustar a categoria ou adicionar observações no módulo de Finanças?`,
-        actionsExecuted: executedActions,
-        suggestions: ['Ver Finanças', 'Analisar meu orçamento', 'Inserir outra despesa'],
-      };
-    }
-
-    // Check for blood test / medical report
-    if (/(exame|sangue|hemograma|colesterol|glicose|triglicer|vitamina|tsh|laudo|m[eé]dic)/i.test(content + ' ' + name)) {
-      const healthRecord = createItem<HealthRecord>('health', userId, {
-        user_id: userId,
-        type: 'exam',
-        title: `Exame de Sangue / Laudo Médico (${name})`,
-        description: 'Parâmetros biomédicos importados e arquivados no módulo de Saúde para acompanhamento.',
-        date: todayStr,
-        status: 'completed',
-        notes: `Parâmetros biomédicos extraídos de ${name}: Glicose, Colesterol e Vitamina D analisados pelo Copilot IA.`,
-      });
-
-      executedActions.push({
-        type: 'analysis',
-        title: `Laudo Médico importado: "${name}"`,
-        link: '/health',
-        data: healthRecord as unknown as Record<string, unknown>,
-      });
-
-      return {
-        message: `🩺 **Laudo Médico / Exame de Sangue Analisado!**\n\n` +
-          `Processe o arquivo **"${name}"** e identifiquei dados de saúde e biomarcadores.\n\n` +
-          `• **Ação Executada:** Registro arquivado no módulo de **Saúde** com sucesso.\n` +
-          `• **Recomendação do Copilot:** Mantenha a hidratação diária em 2500ml, garanta 7-8h de sono reparador e priorize alimentos ricos em micronutrientes.\n\n` +
-          `Deseja agendar um lembrete para sua próxima consulta ou exame de rotina?`,
-        actionsExecuted: executedActions,
-        suggestions: ['Ver Saúde', 'Criar lembrete de exame', 'Analisar Meu Dia'],
-      };
-    }
-
-    // Check for workout routine / fitness sheet
-    if (/(treino|ficha|exerc[ií]cio|s[eé]rie|repeti[cç]|supino|agachamento|hipertrofia)/i.test(content + ' ' + name)) {
-      const task = createItem<Task>('tasks', userId, {
-        user_id: userId,
-        title: `Ficha de Treino Importada: ${name}`,
-        category: 'fitness',
-        priority: 'high',
-        status: 'pending',
-        due_date: todayStr,
-        tags: ['treino', 'importado-ia'],
-        order_index: 0,
-      });
-
-      executedActions.push({
-        type: 'create_task',
-        title: `Ficha de treino importada de "${name}"`,
-        link: '/fitness',
-        data: task as unknown as Record<string, unknown>,
-      });
-
-      return {
-        message: `🏋️ **Ficha de Treino Processada com Sucesso!**\n\n` +
-          `Identifiquei sua rotina de exercícios no documento **"${name}"**.\n\n` +
-          `• **Diretriz de Execução:** Aplique a metodologia de sobrecarga progressiva (tente subir 1 repetição ou 1kg por semana nos exercícios base).\n` +
-          `• **Nutrição Pós-Treino:** Garanta 30-40g de proteína de rápida absorção para maximizar a síntese proteica.\n\n` +
-          `Adicionei a ficha ao seu cronograma ativo de Academia!`,
-        actionsExecuted: executedActions,
-        suggestions: ['Ver Academia e Saúde', 'Registrar treino feito', 'Analisar Meu Dia'],
-      };
-    }
-
-    // Check for task list in document
-    const lines = content.split('\n').filter(l => l.trim().length > 3);
-    if (lines.length > 1 && /(fazer|tarefa|todo|pendencia|planejamento|estudo)/i.test(content)) {
-      const createdTasksTitles: string[] = [];
-      lines.slice(0, 3).forEach(line => {
-        const cleanTitle = line.replace(/^[-*•0-9.)\s]+/, '').trim();
-        if (cleanTitle.length > 2) {
-          createItem<Task>('tasks', userId, {
-            user_id: userId,
-            title: cleanTitle,
-            category: 'personal',
-            priority: 'medium',
-            status: 'pending',
-            due_date: todayStr,
-            tags: ['importado-ia'],
-            order_index: 0,
-          });
-          createdTasksTitles.push(cleanTitle);
-        }
-      });
-
-      executedActions.push({
-        type: 'create_task',
-        title: `${createdTasksTitles.length} tarefas criadas a partir do anexo`,
-        link: '/tasks',
-      });
-
-      return {
-        message: `📋 **Documento Processado com Sucesso!**\n\nIdentifiquei itens de ação no arquivo **"${name}"** e criei as seguintes tarefas para você:\n\n` +
-          createdTasksTitles.map(t => `• ✅ **${t}**`).join('\n') +
-          `\n\nVocê pode gerenciá-las e definir horários na página de Tarefas.`,
-        actionsExecuted: executedActions,
-        suggestions: ['Ver Tarefas', 'Analisar Meu Dia', 'Definir prioridades'],
-      };
-    }
-
-    // Default Document Summary
-    return {
-      message: `📑 **Análise do Anexo "${name}":**\n\n` +
-        `• **Tamanho:** ${(attachment.size / 1024).toFixed(1)} KB\n` +
-        `• **Tipo de Arquivo:** ${attachment.type || 'Documento de Texto'}\n` +
-        `• **Resumo do Conteúdo:** Identifiquei informações relevantes sobre organização pessoal. ${content.slice(0, 200)}...\n\n` +
-        `Gostaria que eu crie tarefas, anotações ou registros com base nesse conteúdo?`,
-      suggestions: ['Criar tarefas deste arquivo', 'Salvar como anotação', 'Analisar meu dia'],
-    };
-  }
+  if (attachment) return { error: true, message: 'Análise de arquivos exige IA remota autenticada. Nenhum dado alterado.' };
 
   // ============================================================
   // 2. ACTION INTENTS (INSERTING / CREATING DATA DIRECTLY)
@@ -923,7 +779,7 @@ export function processAgentMessage(
   if (/(?:pele|skincare|rosto|espinha|oleosidade|olheira)/i.test(msg)) {
     const skinProtocol = transformationProtocols.find(p => p.category === 'skin');
     return {
-      message: `✨ **Rotina Masculina de Cuidados com a Pele (Skincare)**\n\n` +
+      message: `✨ **Modelo de rotina Masculina de Cuidados com a Pele (Skincare)**\n\n` +
         `Sem complicação: apenas 3 minutos pela manhã e 2 minutos à noite para uma pele limpa e descansada.\n\n` +
         skinProtocol!.instructions.map(inst => `• ${inst}`).join('\n\n') +
         `\n\n💧 **Hidratação:** Não esqueça de cumprir os 2.500ml de água no Planly hoje!\n` +
@@ -966,7 +822,7 @@ export function processAgentMessage(
 
   // --- I. NOTÍCIAS REAIS & TENDÊNCIAS DAS ÚLTIMAS 24H ---
   if (/(?:not[ií]cia|radar|24h|mundo|tend[eê]ncia|economia)/i.test(msg)) {
-    let newsText = `📰 **Radar Planly: Destaques & Oportunidades das Últimas 24h**\n\n`;
+    let newsText = `📰 **Abra o Radar do Dia para consultar notícias com fonte e data. Não há notícias carregadas nesta conversa.**\n\n`;
     curatedNews24h.forEach((item, idx) => {
       newsText += `**${idx + 1}. [${item.category}] ${item.headline}**\n`;
       newsText += `• ${item.summary}\n`;
@@ -980,7 +836,7 @@ export function processAgentMessage(
 
   // --- J. ROTINA DO DIA & O QUE FAZER PRIMEIRO ---
   if (/(?:rotina|o que fazer primeiro|hor[aá]rio|cronograma|ordem do dia|planejamento di[aá]rio|dica.*dia|melhorar.*dia)/i.test(msg)) {
-    let routineText = `⏰ **Rotina Estruturada do Seu Dia — O Que Fazer Primeiro**\n\n` +
+    let routineText = `⏰ **Modelo de rotina Estruturada do Seu Dia — O Que Fazer Primeiro**\n\n` +
       `Aqui está seu roteiro cronológico sugerido para vencer o dia sem sobrecarga mental:\n\n`;
 
     dailyScheduleRoutine.slice(0, 5).forEach(b => {
@@ -1013,15 +869,45 @@ export function processAgentMessage(
 }
 
 
-type RemoteAction = { kind: string; title: string; description: string | null; date: string | null; time: string | null; priority: Priority; category: EventCategory; amount: number | null; finance_type: 'income' | 'expense' | null; finance_category: string | null; payment_method: string | null; finance_status: 'pending' | 'paid' | 'received' | 'overdue' | null; location: string | null; name: string | null; frequency: 'daily' | 'weekly' | 'custom' | null; notes: string | null };
-type RemoteResult = { message: string; actions: RemoteAction[] };
-
-/** Executes validated actions returned by the secure Supabase/OpenAI agent. */
 export async function processAgentMessageWithAI(userId: string, message: string, attachment?: AgentAttachment): Promise<AgentResponse> {
-  if (!supabase) return processAgentMessage(userId, message, attachment);
-  const { data, error } = await supabase.functions.invoke<RemoteResult>('planly-agent', { body: { message, attachment } });
+  if (message.length > 12000) return { error: true, message: 'Limite de 12.000 caracteres por mensagem.' };
+  // Public-source queries do not require an AI account or a paid model call.
+  const sourceQuery = !attachment && !/\b(criar|crie|adicionar|adicione|registrar|registre|salvar|salve|editar|edite|excluir)\b/i.test(message);
+  if (sourceQuery && /evangelho|santo do dia|santos do dia|liturgia|leituras de hoje/i.test(message)) {
+    try {
+      const { loadCatholicDay } = await import('./publicContent');
+      const day = await loadCatholicDay(format(new Date(), 'yyyy-MM-dd'));
+      const readings = day.readings.map(r => `${r.title}: ${r.reference}`).join('\n');
+      const saints = day.saints.map(s => `${s.name}: ${s.url}`).join('\n');
+      return { message: `Vatican News — ${day.date}\n${day.celebration}\n\n${readings}\n\n${saints}\n\nTexto completo: ${day.readingsUrl}\n${day.errors.join('\n')}` };
+    } catch { return { error: true, message: 'Não consegui consultar a fonte católica agora. Tente atualizar as leituras na página Vida Espiritual.' }; }
+  }
+  if (sourceQuery && /not[ií]cias|manchetes|radar do dia/i.test(message)) {
+    try {
+      const { loadNews } = await import('./publicContent');
+      const result = await loadNews();
+      return { message: result.items.length ? result.items.slice(0,5).map(n => `${n.title}\n${n.source} — ${new Date(n.date).toLocaleString('pt-BR')}\n${n.url}`).join('\n\n') : `Nenhuma notícia recente foi obtida. ${result.errors.join(' ')}` };
+    } catch { return { error: true, message: 'Não consegui consultar as notícias agora. Tente atualizar o Radar do Dia.' }; }
+  }
+
+  if (attachment) validateAttachment(attachment);
+  if (!supabase) {
+    if (attachment) return { error: true, message: 'Análise de arquivos requer uma sessão autenticada e a função de IA configurada. Nenhum dado foi alterado.' };
+    const response = processAgentMessage(userId, message);
+    return { ...response, message: 'Modo local (comandos por regras, sem modelo de IA).\n\n' + response.message };
+  }
+  const { data: session } = await supabase.auth.getSession();
+  if (!session.session || session.session.user.id !== userId) return { error: true, message: 'A IA remota requer login Supabase correspondente ao perfil atual. Nenhum dado foi alterado.' };
+  const { data, error } = await supabase.functions.invoke<RemoteResult>('planly-agent', { body: { message, attachment, context: { date: format(new Date(), 'yyyy-MM-dd'), timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, workouts: getAllItems<Workout>('workouts', userId).slice(0,20).map(w=>({id:w.id,name:w.name,days_of_week:w.days_of_week,scheduled_date:w.scheduled_date,target_time:w.target_time})), events: getAllItems<CalendarEvent>('events',userId).filter(e=>e.start_date >= format(new Date(),'yyyy-MM-dd')).slice(0,30).map(e=>({title:e.title,date:e.start_date,time:e.start_time})), tasks: getAllItems<Task>('tasks', userId).slice(0, 40).map(t => ({ id: t.id, title: t.title, status: t.status, due_date: t.due_date })) } } });
   if (error || !data) { console.error('[Planly AI] Falha da Edge Function:', error); return { error: true, message: 'Não consegui conectar ao agente da OpenAI agora. Verifique a configuração e tente novamente.' }; }
-  console.info('[Planly AI] Parâmetros extraídos pela OpenAI:', data);
+  const parsed = remoteResultSchema.safeParse(data);
+  if (!parsed.success) return { error: true, message: 'O agente retornou parâmetros inválidos. Nenhuma ação foi executada.' };
+  if (parsed.data.usage) createItem<{ id:string; user_id:string; input_tokens:number; output_tokens:number; total_tokens:number; model:string }>('ai_usage', userId, { user_id:userId, ...parsed.data.usage });
+  return { message: (parsed.data.usage ? `Uso desta consulta: ${parsed.data.usage.input_tokens} tokens de entrada e ${parsed.data.usage.output_tokens} de saída (${parsed.data.usage.model}).\n\n` : '') + parsed.data.message + '\n\nRevise as ações abaixo. Nada foi salvo ainda.', proposedActions: parsed.data, requiresConfirmation: true };
+}
+
+export function executeConfirmedActions(userId: string, proposal: RemoteResult): AgentResponse {
+  const data = remoteResultSchema.parse(proposal);
   const today = format(new Date(), 'yyyy-MM-dd');
   const actionsExecuted: AgentAction[] = [];
   for (const action of data.actions.filter(action => action.kind !== 'none' && action.title.trim())) {
@@ -1032,12 +918,29 @@ export async function processAgentMessageWithAI(userId: string, message: string,
     else if (action.kind === 'reminder') { item = createItem<Reminder>('reminders', userId, { user_id:userId, title:action.title, message:action.description || undefined, category:action.category, date, time:action.time || '09:00', priority:action.priority, status:'active' }); type='create_reminder'; link='/reminders'; }
     else if (action.kind === 'finance') { item = createItem<FinanceEntry>('finance', userId, { user_id:userId, description:action.description || action.title, amount:action.amount ?? 0, type:action.finance_type || 'expense', category:action.finance_category || 'Outros', date, status:action.finance_status || 'paid', payment_method:action.payment_method || undefined, notes:action.notes || undefined }); type='create_finance'; link='/finance'; }
     else if (action.kind === 'habit') { item = createItem<Habit>('habits', userId, { user_id:userId, name:action.name || action.title, description:action.description || action.notes || undefined, category:action.category, frequency:action.frequency || 'daily', start_date:date, active:true }); type='log_habit'; link='/habits'; }
-    else if (action.kind === 'goal') { item = createItem<Goal>('goals', userId, { user_id:userId, title:action.title, description:action.description || undefined, area:'Desenvolvimento pessoal', priority:action.priority, status:'not_started', due_date:date, progress:0, progress_type:'manual', milestones:[] }); type='create_goal'; link='/goals'; }
-    else if (action.kind === 'spiritual') { item = createItem<SpiritualActivity>('spiritual', userId, { user_id:userId, title:action.title, description:action.description || undefined, type:'other', date, time:action.time || undefined, completed:true, private:false }); type='create_spiritual'; link='/spiritual'; }
+    else if (action.kind === 'goal') { item = createItem<Goal>('goals', userId, { user_id:userId, title:action.title, description:action.description || undefined, area:action.category === 'finance' ? 'Finanças' : 'Desenvolvimento pessoal', priority:action.priority, status:'not_started', due_date:date, progress:0, progress_type:'manual', milestones:[] }); type='create_goal'; link='/goals'; }
+    else if (action.kind === 'spiritual') { item = createItem<SpiritualActivity>('spiritual', userId, { user_id:userId, title:action.title, description:action.description || undefined, type:'other', date, time:action.time || undefined, completed:false, private:true }); type='create_spiritual'; link='/spiritual'; }
     else if (action.kind === 'health') { item = createItem<HealthRecord>('health', userId, { user_id:userId, type:'appointment', title:action.title, description:action.description || undefined, date, time:action.time || undefined, status:'scheduled' }); type='analysis'; link='/health'; }
-    else { item = createItem<Task>('tasks', userId, { user_id:userId, title:action.title, description:action.description || undefined, category:action.kind === 'workout' ? 'fitness' : action.category, priority:action.priority, status:'pending', due_date:date, due_time:action.time || undefined, tags:['agente-ia'], order_index:0 }); type='create_task'; link='/tasks'; }
-    console.info('[Planly AI] Item persistido:', item);
+    else if (action.kind === 'workout') {
+      const id = crypto.randomUUID(); const detail = action.workout;
+      const days = [...new Set(detail?.days_of_week || [])];
+      item = createItem<Workout>('workouts', userId, {
+        id, user_id: userId, name: action.title, description: [action.description, action.notes].filter(Boolean).join('\n') || undefined,
+        muscle_groups: detail?.muscle_groups || [], active: true, days_of_week: days,
+        scheduled_date: !days.length ? action.date || undefined : undefined,
+        start_date: days.length ? action.date || undefined : undefined,
+        target_time: action.time || undefined, duration_minutes: detail?.duration_minutes || undefined,
+        exercises: (detail?.exercises || []).map((ex, order_index) => ({
+          id: crypto.randomUUID(), workout_id: id, name: ex.name, sets: ex.sets ?? 0, reps: ex.reps ?? 'Não informado',
+          weight: ex.weight ?? undefined, rest_seconds: ex.rest_seconds ?? undefined, notes: ex.notes || undefined, order_index,
+        })),
+      }); type='analysis'; link='/fitness';
+    }
+    else if (action.kind === 'note') { item = createItem<Note>('notes', userId, { user_id: userId, title: action.title, content: action.description || action.notes || '', pinned: false }); type='analysis'; link='/notes'; }
+    else { item = createItem<Task>('tasks', userId, { user_id:userId, title:action.title, description:action.description || undefined, category:action.category, priority:action.priority, status:'pending', due_date:date, due_time:action.time || undefined, tags:['agente-ia'], order_index:0 }); type='create_task'; link='/tasks'; }
+
     actionsExecuted.push({ type, title: action.name || action.title, link, data: item as unknown as Record<string, unknown> });
+    createItem<{ id: string; user_id: string; action: string; record_id: string; title: string; status: string }>('agent_history', userId, { user_id: userId, action: action.kind, record_id: (item as { id: string }).id, title: action.title, status: 'saved_locally' });
   }
-  return { message: data.message || 'Ação concluída.', actionsExecuted, suggestions: ['Ver Meu Dia', 'Criar outra ação'] };
+  return { message: `${actionsExecuted.length} ação(ões) salva(s) neste navegador.`, actionsExecuted, suggestions: ['Ver Meu Dia', 'Criar outra ação'] };
 }

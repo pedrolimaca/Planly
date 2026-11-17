@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { workoutsOn } from '../services/dayPlanner';
+import { useNavigate } from 'react-router-dom';
+import { useDataRefresh } from '../hooks/useDataRefresh';
+import { useState } from 'react';
 import {
   format, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
   eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, isToday
@@ -16,9 +19,11 @@ import ConfirmDialog from '../components/common/ConfirmDialog';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { getAllItems, createItem, updateItem, deleteItem } from '../services/storage';
-import type { CalendarEvent, EventCategory, Priority } from '../types';
+import type { CalendarEvent, EventCategory, Priority, Workout } from '../types';
 
 export default function CalendarPage() {
+  const navigate = useNavigate();
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const { user } = useAuth();
   const { addToast } = useToast();
 
@@ -47,11 +52,10 @@ export default function CalendarPage() {
   const loadEvents = () => {
     if (!user) return;
     setEvents(getAllItems<CalendarEvent>('events', user.id));
+    setWorkouts(getAllItems<Workout>('workouts', user.id));
   };
 
-  useEffect(() => {
-    loadEvents();
-  }, [user]);
+  useDataRefresh(loadEvents);
 
   // Calendar dates generation
   const monthStart = startOfMonth(currentMonth);
@@ -63,7 +67,8 @@ export default function CalendarPage() {
   const weekDayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
 
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
-  const selectedDateEvents = events.filter(e => e.start_date === selectedDateStr);
+  const eventsOn = (date: string): CalendarEvent[] => [...events.filter(e => e.start_date <= date && (e.end_date || e.start_date) >= date), ...workoutsOn(workouts, date).map(w => ({ id: `workout:${w.id}`, user_id: w.user_id, title: w.name, description: 'Treino — edite na Academia', category: 'fitness' as const, start_date: date, start_time: w.target_time, all_day: !w.target_time, priority: 'medium' as const, created_at: w.created_at, updated_at: w.updated_at }))];
+  const selectedDateEvents = eventsOn(selectedDateStr);
 
   const openCreateModal = (targetDate?: Date) => {
     const d = targetDate || selectedDate;
@@ -84,6 +89,7 @@ export default function CalendarPage() {
   };
 
   const openEditModal = (event: CalendarEvent) => {
+    if (event.id.startsWith('workout:')) { navigate('/fitness'); return; }
     setEventToEdit(event);
     setTitle(event.title);
     setDescription(event.description || '');
@@ -159,7 +165,7 @@ export default function CalendarPage() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, backgroundColor: 'var(--surface-card)', borderRadius: 'var(--border-radius-md)', padding: '4px 8px', border: '1px solid var(--border-color)' }}>
             <Button variant="ghost" size="sm" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
               <ChevronLeft size={16} />
@@ -183,7 +189,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Grid: Month View (Left) & Day Events Panel (Right) */}
-      <div className="calendar-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(300px, 1fr)', gap: 'var(--space-6)', alignItems: 'flex-start' }}>
+      <div className="calendar-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(min(100%, 300px), 1fr)', gap: 'var(--space-6)', alignItems: 'flex-start' }}>
         {/* Month View Card */}
         <Card style={{ padding: 'var(--space-4)', overflow: 'hidden' }}>
           {/* Weekday headers */}
@@ -201,7 +207,7 @@ export default function CalendarPage() {
               const dayStr = format(day, 'yyyy-MM-dd');
               const isSelected = isSameDay(day, selectedDate);
               const isCurrentMonth = isSameMonth(day, currentMonth);
-              const dayEvents = events.filter(e => e.start_date === dayStr);
+              const dayEvents = eventsOn(dayStr);
               const isDayToday = isToday(day);
 
               return (
@@ -359,7 +365,7 @@ export default function CalendarPage() {
                     <Button variant="ghost" size="sm" onClick={() => openEditModal(ev)} style={{ padding: 4 }}>
                       <Edit3 size={13} />
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={() => setEventToDelete(ev)} style={{ padding: 4 }}>
+                    <Button variant="ghost" size="sm" onClick={() => ev.id.startsWith('workout:') ? navigate('/fitness') : setEventToDelete(ev)} style={{ padding: 4 }}>
                       <Trash2 size={13} style={{ color: '#ef4444' }} />
                     </Button>
                   </div>
