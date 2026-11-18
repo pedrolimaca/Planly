@@ -1,3 +1,4 @@
+import './holidays.test';
 import './vercel.test';
 import './sync.test';
 import { dailyTopic, suggestTracks, selectGuitarTrack, guitarStreak } from '../src/services/guitarPractice';

@@ -1,3 +1,4 @@
+import { holidaysForYear, holidaySources, type HolidayRegion } from '../services/holidays';
 import { workoutsOn } from '../services/dayPlanner';
 import { useNavigate } from 'react-router-dom';
 import { useDataRefresh } from '../hooks/useDataRefresh';
@@ -23,6 +24,7 @@ import type { CalendarEvent, EventCategory, Priority, Workout } from '../types';
 
 export default function CalendarPage() {
   const navigate = useNavigate();
+  const [holidayRegion, setHolidayRegion] = useState<HolidayRegion>('all');
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const { user } = useAuth();
   const { addToast } = useToast();
@@ -51,6 +53,8 @@ export default function CalendarPage() {
 
   const loadEvents = () => {
     if (!user) return;
+    const pref=getAllItems<{id:string;region:HolidayRegion}>('calendar_preferences',user.id).find(p=>p.id==='holidays');
+    setHolidayRegion(pref?.region || 'all');
     setEvents(getAllItems<CalendarEvent>('events', user.id));
     setWorkouts(getAllItems<Workout>('workouts', user.id));
   };
@@ -69,6 +73,13 @@ export default function CalendarPage() {
   const selectedDateStr = format(selectedDate, 'yyyy-MM-dd');
   const eventsOn = (date: string): CalendarEvent[] => [...events.filter(e => e.start_date <= date && (e.end_date || e.start_date) >= date), ...workoutsOn(workouts, date).map(w => ({ id: `workout:${w.id}`, user_id: w.user_id, title: w.name, description: 'Treino — edite na Academia', category: 'fitness' as const, start_date: date, start_time: w.target_time, all_day: !w.target_time, priority: 'medium' as const, created_at: w.created_at, updated_at: w.updated_at }))];
   const selectedDateEvents = eventsOn(selectedDateStr);
+  const holidayList = [...new Set(days.map(day=>day.getFullYear()).concat(selectedDate.getFullYear()))].flatMap(year=>holidaysForYear(year,holidayRegion));
+  const holidaysOn = (date:string)=>holidayList.filter(h=>h.date===date);
+  const monthHolidays=holidayList.filter(h=>h.date.startsWith(format(currentMonth,'yyyy-MM')));
+  const changeHolidayRegion=(region:HolidayRegion)=>{
+    setHolidayRegion(region);
+    if(user && !updateItem<{id:string;region:HolidayRegion}>('calendar_preferences',user.id,'holidays',{region}))createItem<{id:string;region:HolidayRegion}>('calendar_preferences',user.id,{id:'holidays',region});
+  };
 
   const openCreateModal = (targetDate?: Date) => {
     const d = targetDate || selectedDate;
@@ -188,10 +199,12 @@ export default function CalendarPage() {
         </div>
       </div>
 
+      <details className="calendar-holiday-reference"><summary>Feriados de {format(currentMonth,'MMMM yyyy',{locale:ptBR})} ({monthHolidays.length})</summary><ul>{monthHolidays.map(h=><li key={h.date+h.name}><button type="button" onClick={()=>setSelectedDate(new Date(h.date+'T12:00:00'))}><strong>{h.date.slice(8)}/{h.date.slice(5,7)}</strong> {h.name} <small>· {h.scope}</small></button></li>)}</ul>{!monthHolidays.length&&<p>Sem feriados neste mês para o filtro selecionado.</p>}<p>Regras verificadas nos calendários oficiais de 2026. {currentMonth.getFullYear()!==2026&&'Para este ano, as datas são calculadas pelas mesmas regras; confirme alterações nas fontes oficiais.'} Pontos facultativos não estão incluídos.</p><div><a href={holidaySources.national} target="_blank" rel="noreferrer">Brasil ↗</a> · <a href={holidaySources.sjc} target="_blank" rel="noreferrer">São José dos Campos ↗</a> · <a href={holidaySources.taubate} target="_blank" rel="noreferrer">Taubaté ↗</a></div></details>
       {/* Grid: Month View (Left) & Day Events Panel (Right) */}
-      <div className="calendar-main-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.8fr) minmax(min(100%, 300px), 1fr)', gap: 'var(--space-6)', alignItems: 'flex-start' }}>
+      <div className="calendar-holiday-controls"><label>Feriados <select aria-label="Feriados" className="input" value={holidayRegion} onChange={e=>changeHolidayRegion(e.target.value as HolidayRegion)}><option value="all">Brasil + São José dos Campos + Taubaté</option><option value="national">Somente nacionais</option><option value="sjc">Brasil + SP + São José dos Campos</option><option value="taubate">Brasil + SP + Taubaté</option></select></label><small>Datas em destaque: toque no dia para ver o feriado e seus compromissos.</small></div>
+      <div className="calendar-main-grid">
         {/* Month View Card */}
-        <Card style={{ padding: 'var(--space-4)', overflow: 'hidden' }}>
+        <Card className="calendar-month-card" style={{ padding: 'var(--space-4)' }}>
           {/* Weekday headers */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6, marginBottom: 8, textAlign: 'center' }}>
             {weekDayNames.map(day => (
@@ -202,20 +215,25 @@ export default function CalendarPage() {
           </div>
 
           {/* Days Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gridAutoRows: '112px', gap: 6 }}>
+          <div className="calendar-days-grid">
             {days.map(day => {
               const dayStr = format(day, 'yyyy-MM-dd');
               const isSelected = isSameDay(day, selectedDate);
               const isCurrentMonth = isSameMonth(day, currentMonth);
               const dayEvents = eventsOn(dayStr);
               const isDayToday = isToday(day);
+              const dayHolidays = holidaysOn(dayStr);
 
               return (
                 <div
                   key={dayStr}
+                  className="calendar-day" role="button" tabIndex={0}
+                  aria-label={`${format(day,'dd/MM/yyyy')}${dayHolidays.length ? ' · '+dayHolidays.map(h=>h.name).join(', ') : ''}`}
+                  aria-pressed={isSelected}
+                  onKeyDown={e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();setSelectedDate(day);}}}
                   onClick={() => setSelectedDate(day)}
                   style={{
-                    height: '112px',
+                    height: '100%',
                     minHeight: 0,
                     minWidth: 0,
                     overflow: 'hidden',
@@ -250,14 +268,16 @@ export default function CalendarPage() {
                       {format(day, 'd')}
                     </span>
                     {dayEvents.length > 0 && (
-                      <span className="text-xs font-bold text-secondary" style={{ fontSize: '0.7rem' }}>
+                      <span className="calendar-event-count text-xs font-bold text-secondary" style={{ fontSize: '0.7rem' }}>
                         {dayEvents.length}
                       </span>
                     )}
                   </div>
 
+                  <div className="calendar-day-markers">{dayHolidays.length>0&&<span className="calendar-holiday-dot" title="Feriado" />}{dayEvents.length>0&&<span className="calendar-event-dot" title={`${dayEvents.length} compromisso(s)`}/>}</div>
+                  {dayHolidays.map(h=><span className="calendar-holiday-label" key={h.name} title={`${h.name} · ${h.scope}`}>{h.name}</span>)}
                   {/* Event pills inside calendar day */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, width: '100%', flex: 1, overflow: 'hidden' }}>
+                  <div className="calendar-event-pills" style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0, width: '100%', flex: 1, overflow: 'hidden' }}>
                     {dayEvents.slice(0, 2).map(ev => (
                       <div
                         key={ev.id}
@@ -297,7 +317,7 @@ export default function CalendarPage() {
         </Card>
 
         {/* Selected Day Agenda Panel */}
-        <Card
+        <Card className="calendar-agenda"
           title={
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <CalendarIcon size={18} className="text-primary" />
@@ -311,6 +331,7 @@ export default function CalendarPage() {
             </Button>
           }
         >
+          {holidaysOn(selectedDateStr).map(h=><article className="calendar-holiday-detail" key={h.name}><strong>{h.name}</strong><span>Feriado · {h.scope}</span><a href={h.source} target="_blank" rel="noreferrer">Consultar fonte oficial ↗</a></article>)}
           {selectedDateEvents.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-secondary)' }}>
               <CalendarIcon size={36} style={{ color: 'var(--text-tertiary)', margin: '0 auto 8px' }} />
